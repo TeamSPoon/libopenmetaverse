@@ -945,7 +945,7 @@ namespace OpenMetaverse
 
         #region Public Methods
 
-        public virtual OSD GetOSD()
+        public virtual OSD GetOSDL()
         {
             OSDMap path = new OSDMap(14);
             path["begin"] = OSD.FromReal(PrimData.PathBegin);
@@ -1018,7 +1018,7 @@ namespace OpenMetaverse
         }
 
         public static bool prefixFP = true;
-        public virtual OSDMap GetTotalOSD()
+        public virtual OSDMap GetOSD()
         {
             if (Properties != null) Properties.ApplyProperties(this);
             OSDMap path = new OSDMap(14);
@@ -1272,7 +1272,7 @@ namespace OpenMetaverse
         public static Primitive FromOSD(OSD osd)
         {
             Primitive prim = new Primitive();
-            Primitive.ConstructionData data;
+            Primitive.ConstructionData data = new ConstructionData();
 
             OSDMap map = (OSDMap)osd;
             OSDMap volume = (OSDMap)map["volume"];
@@ -1304,8 +1304,8 @@ namespace OpenMetaverse
             data.ProfileBegin = (float)profile["begin"].AsReal();
             data.ProfileEnd = (float)profile["end"].AsReal();
             data.ProfileHollow = (float)profile["hollow"].AsReal();
-            data.ProfileCurve = (ProfileCurve)profile["curve"].AsInteger();
-            data.ProfileHole = (HoleType)profile["hole"].AsInteger();
+            data.ProfileCurve = (ProfileCurve) profile["curve"].AsInteger();
+            data.ProfileHole = (HoleType) profile["hole"].AsInteger();
 
             #endregion Path/Profile
 
@@ -1356,7 +1356,7 @@ namespace OpenMetaverse
         {
             Primitive prim = new Primitive();
             prim.Deserialize(osd as OSDMap);
-            Primitive.ConstructionData data;
+            Primitive.ConstructionData data = new ConstructionData();
 
             OSDMap map = (OSDMap)osd;
             OSDMap volume = (OSDMap)map["volume"];
