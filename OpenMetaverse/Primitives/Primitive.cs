@@ -1018,7 +1018,7 @@ namespace OpenMetaverse
         }
 
         public static bool prefixFP = true;
-        public virtual OSDMap GetOSD()
+        public virtual OSD GetOSD()
         {
             if (Properties != null) Properties.ApplyProperties(this);
             OSDMap path = new OSDMap(14);
