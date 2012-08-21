@@ -1269,7 +1269,7 @@ namespace OpenMetaverse
             Properties.SalePrice = map["sale_price"].AsInteger();
             Properties.SaleType = (SaleType)map["sale_type"].AsInteger();
         }
-        public static Primitive FromOSD(OSD osd)
+        public static Primitive FromOSDL(OSD osd)
         {
             Primitive prim = new Primitive();
             Primitive.ConstructionData data = new ConstructionData();
@@ -1352,7 +1352,7 @@ namespace OpenMetaverse
             return prim;
         }
 
-        public static Primitive FromTotalOSD(OSD osd)
+        public static Primitive FromOSD(OSD osd)
         {
             Primitive prim = new Primitive();
             prim.Deserialize(osd as OSDMap);
