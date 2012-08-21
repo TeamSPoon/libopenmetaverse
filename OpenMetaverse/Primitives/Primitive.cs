@@ -1649,6 +1649,8 @@ namespace OpenMetaverse
 
         public override int GetHashCode()
         {
+            // Some people have been complaining that prims hashcode changes as their data changes
+            if (Settings.PRIMS_KEEP_HASHCODES) return LocalID.GetHashCode();
             return
                 Position.GetHashCode() ^
                 Velocity.GetHashCode() ^

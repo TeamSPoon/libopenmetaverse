@@ -158,6 +158,11 @@ namespace OpenMetaverse
         ///    is running back and forth between region edges or a sim is comming and going
         /// </summary>
         public static int SIMULATOR_POOL_TIMEOUT = 2 * 60 * 1000;
+        /// <summary>
+        /// Some people have been complaining that a prim's hashcode changes as it's data changes
+        /// Setting this to true allows their identity to be based off only their localID
+        /// </summary>
+        public static bool PRIMS_KEEP_HASHCODES = false;
 
         #endregion
 
