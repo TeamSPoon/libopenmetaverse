@@ -1036,6 +1036,7 @@ namespace OpenMetaverse
                 avatarGroup.GroupInsigniaID = msg.GroupDataBlock[i].GroupInsigniaID;
                 avatarGroup.GroupName = msg.GroupDataBlock[i].GroupName;
                 avatarGroup.GroupPowers = msg.GroupDataBlock[i].GroupPowers;
+                avatarGroup.GroupTitle = msg.GroupDataBlock[i].GroupTitle;
                 avatarGroup.ListInProfile = msg.NewGroupDataBlock[i].ListInProfile;
 
                 avatarGroups.Add(avatarGroup);

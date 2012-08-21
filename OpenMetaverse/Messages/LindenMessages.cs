@@ -1477,6 +1477,8 @@ namespace OpenMetaverse.Messages.Linden
             /// <summary>The aggregate permissions the agent has in the group for all roles the agent
             /// is assigned</summary>
             public GroupPowers GroupPowers;
+            /// <summary>The agents personal title in the group</summary>
+            public string GroupTitle;
         }
 
         /// <summary>An optional block containing additional agent specific information</summary>
@@ -1566,6 +1568,7 @@ namespace OpenMetaverse.Messages.Linden
                 groupData.GroupName = groupMap["GroupName"].AsString();
                 groupData.GroupPowers = (GroupPowers)groupMap["GroupPowers"].AsLong();
                 groupData.AcceptNotices = groupMap["AcceptNotices"].AsBoolean();
+                groupData.GroupTitle = groupMap["GroupTitle"].AsString();
                 GroupDataBlock[i] = groupData;
             }
 
