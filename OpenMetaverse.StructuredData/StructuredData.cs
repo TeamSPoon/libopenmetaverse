@@ -29,6 +29,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Runtime.Serialization.Formatters.Binary;
 using System.Text;
 
 namespace OpenMetaverse.StructuredData
@@ -180,7 +181,7 @@ namespace OpenMetaverse.StructuredData
 
         public static OSD FromObject(object value)
         {
-            if (value == null) { return new OSD(); }
+            if (value == null) { return new OSDNull(); }
             else if (value is bool) { return new OSDBoolean((bool)value); }
             else if (value is int) { return new OSDInteger((int)value); }
             else if (value is uint) { return new OSDBinary((uint)value); }
@@ -203,11 +204,30 @@ namespace OpenMetaverse.StructuredData
             else if (value is Vector4) { return FromVector4((Vector4)value); }
             else if (value is Quaternion) { return FromQuaternion((Quaternion)value); }
             else if (value is Color4) { return FromColor4((Color4)value); }
-            else return new OSD();
+            else return new OSDNull(value);
         }
 
         public static object ToObject(Type type, OSD value)
         {
+            if (type == typeof(UUID[]))
+            {
+                if (value.Type == OSDType.Array)
+                {
+                    var osda = (OSDArray) value;
+                    int len = osda.Count;
+                    var o = new UUID[len];
+                    for (int i = 0; i < osda.Count; i++)
+                    {
+                        OSD osd = osda[i];
+                        o[i] = osd.AsUUID();
+                    }
+                    return o;
+                }
+                if (value.Type == OSDType.Unknown)
+                {
+                    return null;
+                }
+            }
             if (type == typeof(ulong))
             {
                 if (value.Type == OSDType.Binary)
@@ -323,6 +343,10 @@ namespace OpenMetaverse.StructuredData
         public static implicit operator bool(OSD value) { return value.AsBoolean(); }
         public static implicit operator int(OSD value) { return value.AsInteger(); }
         public static implicit operator uint(OSD value) { return value.AsUInteger(); }
+        public static implicit operator byte(OSD value) { return (byte)value.AsUInteger(); }
+        public static implicit operator sbyte(OSD value) { return (sbyte)value.AsInteger(); }
+        public static implicit operator short(OSD value) { return (short)value.AsInteger(); }
+        public static implicit operator ushort(OSD value) { return (ushort)value.AsUInteger(); }
         public static implicit operator long(OSD value) { return value.AsLong(); }
         public static implicit operator ulong(OSD value) { return value.AsULong(); }
         public static implicit operator double(OSD value) { return value.AsReal(); }
@@ -394,6 +418,677 @@ namespace OpenMetaverse.StructuredData
                 }
             }
         }
+
+        public static bool AddObjectOSD(object primitive, OSDMap map, Type from , bool prefixFP)
+        {
+            return AddObjectOSD0(primitive, map, from, new HashSet<object>(), true, prefixFP);
+        }
+        public static bool AddObjectOSD0(object primitive, OSDMap map, Type from, HashSet<object> exceptFor, bool firstCall, bool prefixFP)
+        {
+            from = from ?? primitive.GetType();
+            if (!firstCall && exceptFor != null)
+            {
+                if (TypeInSet(from, exceptFor)) return false;
+                if (!(from.IsValueType) && !(from == typeof(UUID)) && !(from == typeof(string)))
+                {
+                    if (exceptFor.Contains(typeof(object)))
+                    {
+                        return false;
+                    }
+                    if (exceptFor.Contains(primitive))
+                    {
+                        return false;
+                    }
+                    exceptFor.Add(primitive);
+                }
+            }
+            map["typeosd"] = from.FullName;
+            map["prefixfp"] = prefixFP;
+            bool added = false;
+            bool skipped = false;
+            foreach (var v in from.GetMembers(ipf))
+            {
+                string n = v.Name;
+                if (n.StartsWith("_")) continue;
+                if (v is MethodBase)
+                {
+                    continue;
+                }
+                if (v.IsDefined(typeof(NonSerializedAttribute), true)) continue;
+                string pn = prefixFP ? "p_" : "" + n;
+                string fn = prefixFP ? "f_" : "" + n;
+                if (map[fn] || map[pn]) continue;
+                var p = v as PropertyInfo;
+                if (p != null && p.CanRead && p.CanWrite && p.GetIndexParameters().Length == 0)
+                {
+                    var ad = AddOSDMember(map, pn, p.GetValue(primitive, null), p.PropertyType, exceptFor, prefixFP);
+                    if (ad) added = true; else skipped = true;
+                    continue;
+                }
+                var f = v as FieldInfo;
+                if (f != null && !f.IsStatic && !f.IsLiteral)
+                {
+                    var ad = AddOSDMember(map, fn, f.GetValue(primitive), f.FieldType, exceptFor, prefixFP);
+                    if (ad) added = true; else skipped = true;
+                    continue;
+                }
+            }
+            return added && !skipped;
+        }
+
+        private static bool TypeInSet(Type from, ICollection<object> exceptFor)
+        {
+            if (from == null || from == typeof(object)) return false;
+            if (exceptFor.Contains(from)) return true;
+            foreach (Type type in from.GetInterfaces())
+            {
+                if (exceptFor.Contains(type)) return true;
+            }
+            return TypeInSet(from.BaseType, exceptFor);
+        }
+
+        const BindingFlags ipf = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic |
+                                            BindingFlags.FlattenHierarchy;
+        public static void SetObjectOSD(object primitive, OSDMap map)
+        {
+            Type from = primitive.GetType();
+            string From = map["typeosd"].AsString();//, primitive.GetType().FullName);
+            bool prefixFP = map["prefixfp"];
+            from = System.Type.GetType(From) ?? from;
+            int mapManips = 0;
+            foreach (var v in from.GetMembers(ipf))
+            {
+                if (v is MethodBase)
+                {
+                    continue;
+                }
+                if (v.IsDefined(typeof(NonSerializedAttribute), true)) continue;
+                string n = v.Name;
+                if (n.StartsWith("_")) continue;
+                var p = v as PropertyInfo;
+                if (p != null && p.CanRead && p.CanWrite && p.GetIndexParameters().Length == 0)
+                {
+                    bool found;
+                    string pn = "p_" + n;
+                    if (map[pn].Type != OSDType.Unknown)
+                    {
+                        n = pn;
+                    }
+                    else
+                    {
+                        if (prefixFP) continue;
+                    }
+                    var suggest = p.GetValue(primitive, null);
+                    object setOSDMember = GetOSDMember(suggest,map, n, p.PropertyType, out found);
+                    if (found)
+                    {
+                        p.SetValue(primitive, setOSDMember, null);
+                        mapManips++;
+                        continue;
+                    }
+                    continue;
+                }
+                var f = v as FieldInfo;
+                if (f != null && !f.IsStatic && !f.IsLiteral)
+                {
+                    bool found;
+                    string pn = "f_" + n;
+                    if (map[pn].Type != OSDType.Unknown)
+                    {
+                        n = pn;
+                    }
+                    else
+                    {
+                        if (prefixFP) continue;
+                    }
+                    var suggest = f.GetValue(primitive);
+                    object setOSDMember = GetOSDMember(suggest, map, n, f.FieldType, out found);
+                    if (found)
+                    {
+                        f.SetValue(primitive, setOSDMember);
+                        mapManips++;
+                        continue;
+                    }
+                    continue;
+                }
+            }
+        }
+
+        private static object GetOSDMember(object suggest, OSDMap map, string s, Type type, out bool found)
+        {
+            var v = map[s];
+            if (v == null)
+            {
+                found = false;
+                return null;
+            }
+            found = true;
+            if (type == typeof (string)) return v.AsString();
+            if (type == typeof (Vector3)) return v.AsVector3();
+            if (type == typeof (UUID)) return v.AsUUID();
+            var oo = ToObject(type, v);
+            if (oo != null)
+            {
+                return oo;
+            }
+            found = false;
+            oo = ConvertOP(v, new[] {typeof (OSD)}, type, typeof (OSD), out found);
+            if (found)
+            {
+                return oo;
+            }
+            oo = ConvertOP(v, new[] {typeof (OSD)}, type, type, out found);
+            if (found)
+            {
+                return oo;
+            }
+            if (v is OSDBinary && type.IsDefined(typeof(SerializableAttribute), false))
+            {
+                using (Stream stream = new MemoryStream(v.AsBinary()))
+                {
+                    BinaryFormatter bformatter = new BinaryFormatter();
+                    return bformatter.Deserialize(stream);
+                }
+            }
+            if (!(v is OSDMap))
+            {
+                return oo;
+            }
+            map = v as OSDMap;
+            if (suggest != null)
+            {
+                SetObjectOSD(suggest, map);
+                found = true;
+                return suggest;
+            }
+            if (map["typeosd"])
+            {
+                string sntype = map["typeosd"];
+                System.Type ntype = System.Type.GetType(sntype);
+                if (ntype == null)
+                {
+                    if (!type.IsAbstract && !type.IsInterface)
+                        ntype = type;
+                }
+                if (ntype != null && type.IsAssignableFrom(ntype))
+                {
+                    var ci = ntype.GetConstructor(new Type[0]);
+                    if (ci != null)
+                    {
+                        oo = ci.Invoke(new object[0]);
+                        SetObjectOSD(oo, map);
+                        found = true;
+                    }
+                    else
+                    {
+                        ci = ntype.GetConstructor(new Type[] {typeof (OSD)});
+                        if (ci != null)
+                        {
+                            oo = ci.Invoke(new object[] {v});
+                            found = true;
+                        }
+                    }
+                }
+            }
+            return oo;
+            //return v;
+        }
+
+        private const BindingFlags basePropertyFlags = BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public;
+        const BindingFlags publicStatic = (BindingFlags.Public | BindingFlags.Static);
+        static ParameterModifier[] MODIFIERS_ZERO = new ParameterModifier[0];
+        static readonly Dictionary<string ,MethodInfo> conversions =  new Dictionary<string, MethodInfo>();
+        public static object ConvertOP(object StartObject, Type[] fromTypes, Type toType, Type operatorType, out bool found)
+        {
+            found = true;
+            toType = toType ?? operatorType;
+            object retval = null;
+            if (fromTypes == null)
+                fromTypes = (StartObject != null) ? new Type[] { StartObject.GetType() } : new Type[0];
+
+            string convKey = null;
+            if (fromTypes.Length == 1)
+            {
+                convKey = fromTypes[0].FullName + "->" + toType.FullName;
+            }
+
+            MethodInfo mi = null;
+            if (convKey != null) lock (conversions) conversions.TryGetValue(convKey, out mi);
+            try
+            {
+                if (mi == null)
+                {
+                    if (fromTypes.Length == 1)
+                        mi = operatorType.GetMethod("op_Explicit", publicStatic, null, fromTypes, MODIFIERS_ZERO);
+                }
+            }
+            catch (AmbiguousMatchException)
+            {
+                mi = null;
+            }
+
+            if (mi != null && !toType.IsAssignableFrom(mi.ReturnType)) mi = null;
+
+            try
+            {
+                if (mi == null)
+                    if (fromTypes.Length == 1) mi = operatorType.GetMethod("op_Implicit", publicStatic, null, fromTypes, MODIFIERS_ZERO);
+            }
+            catch (AmbiguousMatchException)
+            {
+                mi = null;
+            }
+
+            if (mi != null && !toType.IsAssignableFrom(mi.ReturnType)) mi = null;
+
+            var objects = new object[] { StartObject };
+            if (mi != null) //there is a conversion operator!
+            {
+                try
+                {
+                    return operatorType.InvokeMember(mi.Name,
+                                                  BindingFlags.InvokeMethod | publicStatic,
+                                                  null, null, objects);
+                }
+                catch (Exception)
+                {
+                    if (convKey != null) lock (conversions) conversions[convKey] = mi;
+                    return mi.Invoke(null, objects);
+                }
+            }
+
+            Type ftype = fromTypes[0];
+            if (ftype==typeof(UUID[]) && toType==typeof(OSD))
+            {
+                var uuids = (UUID[])StartObject;
+                OSDArray osdArray = new OSDArray(uuids.Length);
+                for (int i = 0; i < uuids.Length; i++)
+                {
+                    var u = uuids[i];
+                    osdArray.Add((OSD)u);
+                }
+                return osdArray;
+            }
+            foreach (var m in operatorType.GetMethods(BindingFlags.InvokeMethod | (BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic)))
+            {
+                Type returnType = m.ReturnType;
+                // check if too general
+                if (returnType == typeof(object) && returnType != toType) continue;
+                if (!toType.IsAssignableFrom(returnType)) continue;
+                ParameterInfo[] pts = m.GetParameters();
+                if (pts.Length != 1) continue;
+                Type paramType = pts[0].ParameterType;
+                if (paramType == typeof(object))
+                {
+                    //too general
+                    continue;
+                }
+                foreach (var searchType in fromTypes)
+                {
+
+                    if (paramType.IsAssignableFrom(searchType))
+                    {
+                        convKey = searchType.FullName + "->" + toType.FullName;
+                        lock (conversions) conversions[convKey] = m;
+                        return m.Invoke(null, objects);
+                    }
+                }
+            }
+            if (toType.IsEnum)
+            {
+                var ust = Enum.GetUnderlyingType(toType);
+                if (ust != toType)
+                {
+                    retval = ConvertOP(StartObject, fromTypes, ust, operatorType, out found);
+                    if (found)
+                    {
+                        return InvokeCast(retval, toType);
+                    }
+                }
+            }
+            found = false;
+            return retval;
+        }
+
+        public static T Cast<T>(object o)
+        {
+            return (T)o;
+        }
+
+        static Dictionary<Type,MethodInfo> cm = new Dictionary<Type, MethodInfo>();
+        public static object InvokeCast(Object obj, Type t)
+        {
+            MethodInfo castMethod = null;
+            lock (cm) if (!cm.TryGetValue(t, out castMethod))
+            {
+                cm[t] = castMethod = typeof (OSD).GetMethod("Cast").MakeGenericMethod(t);
+            }
+            object castedObject = castMethod.Invoke(null, new object[] {obj});
+            return castedObject;
+        }
+
+        public static bool AddOSDMember(OSDMap map, string s, object value, Type type, HashSet<object> exceptFor, bool prefixFP)
+        {
+            if (type == typeof(UUID))
+            {
+                var uuid = (UUID)value;
+                if (UUID.Zero != uuid)
+                {
+                    map[s] = uuid;
+                    return true;
+                }
+            }
+            if (map.ContainsKey(s)) return false;
+            bool added = AddOSDMember0(map, s, value, type);
+            if (added) return true;
+            if (value == null) return false;
+            MethodInfo toOSD = type.GetMethod("GetOSD");
+            if (toOSD != null)
+            {
+                var osdv = toOSD.Invoke(value, new object[0]) as OSD;
+                if (osdv != null)
+                {
+                    map.Add(s, osdv);
+                    return true;
+                }
+            }
+            toOSD = type.GetMethod("Serialize");
+            if (toOSD != null)
+            {
+                var osdv = toOSD.Invoke(value, new object[0]) as OSD;
+                if (osdv != null)
+                {
+                    map.Add(s, osdv);
+                    return true;
+                }
+            }
+
+            if (type.IsEnum)
+            {
+                type = Enum.GetUnderlyingType(type);
+                if (type == typeof(int))
+                {
+                    map.Add(s, (int)value);
+                    return true;
+                }
+                if (type == typeof(uint))
+                {
+                    map.Add(s, (uint)value);
+                    return true;
+                }
+                if (type == typeof(byte))
+                {
+                    map.Add(s, (byte)value);
+                    return true;
+                }
+                if (type == typeof(sbyte))
+                {
+                    map.Add(s, (sbyte)value);
+                    return true;
+                }
+
+                if (type == typeof(long))
+                {
+                    map.Add(s, (long)value);
+                    return true;
+                }
+                if (type == typeof(ulong))
+                {
+                    map.Add(s, (ulong)value);
+                    return true;
+                }
+                if (type == typeof(short))
+                {
+                    map.Add(s, (short)value);
+                    return true;
+                }
+                if (type == typeof(ushort))
+                {
+                    map.Add(s, (ushort)value);
+                    return true;
+                }
+
+                try
+                {
+                    var i = (char)value;
+                    map.Add(s, i);
+                    return true;
+                }
+                catch (Exception)
+                {
+                    try
+                    {
+                        var i = (uint)value;
+                        map.Add(s, i);
+                        return true;
+                    }
+                    catch (Exception)
+                    {
+                        try
+                        {
+                            var i = (int)value;
+                            map.Add(s, i);
+                            return true;
+                        }
+                        catch (Exception)
+                        {
+                            try
+                            {
+                                var i = (ulong)value;
+                                map.Add(s, i);
+                                return true;
+                            }
+                            catch (Exception)
+                            {
+                                return false;
+                                throw;
+                            }
+                        }
+                    }
+                }
+            }
+            if (value is object[])
+            {                
+                var obj = (object[])value;
+                OSD osda = FromArray(obj, exceptFor, prefixFP);
+                map.Add(s, osda);
+                return true;
+            }
+            if (value is IEnumerable)
+            {
+                var obj = (IEnumerable)value;
+
+                var osda = new OSDArray();
+                lock (obj) foreach (object a in obj)
+                {
+                    osda.Add(GetOSD(a, type.GetElementType(), exceptFor, prefixFP));
+                }
+                map.Add(s, osda);
+                return true;
+            }
+            var at = value.GetType();                
+            if (value is Array && at.GetArrayRank()==1)
+            {
+                Array obj = (Array) value;
+                OSDArray osda = new OSDArray();
+                for (int i = 0; i < obj.Length; i++)
+                {
+                    object a = obj.GetValue(i);
+                    osda.Add(GetOSD(a, type.GetElementType(), exceptFor, prefixFP));
+                }
+                map.Add(s, osda);
+                return true;
+            }
+            var submap = new OSDMap();
+            AddObjectOSD0(value, submap, type, exceptFor, false, prefixFP);
+            if (submap.Count > 1)
+            {
+                map.Add(s, submap);
+                return true;
+            }
+            if (at.IsDefined(typeof(SerializableAttribute), false))
+            {
+                using (Stream stream = new MemoryStream())
+                {
+                    BinaryFormatter bformatter = new BinaryFormatter();
+                    lock (value)
+                    {
+                        bformatter.Serialize(stream, value);
+                    }
+                    int streamLength = Convert.ToInt32(stream.Length);
+                    byte[] fileData = new byte[streamLength + 1];
+                    stream.Seek(0, SeekOrigin.Begin);
+                    stream.Read(fileData, 0, streamLength);
+                    //stream.Close();
+                    map.Add(s, FromBinary(fileData));
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static OSD GetOSD(object o, Type type, HashSet<object> exceptFor, bool prefixFP)
+        {
+            if (o == null) return null;
+            OSDMap map = new OSDMap();
+            AddOSDMember(map, "value", o, type ?? o.GetType(), exceptFor, prefixFP);
+            return map["value"];
+        }
+
+        private static bool AddOSDMember0(OSDMap map, string s, object value, Type type)
+        {
+            if (value == null) return false;
+            if (type == typeof(UUID))
+            {
+                var uuid = (UUID)value;
+                if (UUID.Zero != uuid)
+                {
+                    map[s] = uuid;
+                    return true;
+                }
+                map[s] = uuid;
+                return true;
+            }
+
+            var searchTypes = new HashSet<Type>() { type };
+            foreach (Type t in type.GetInterfaces())
+            {
+                searchTypes.Add(t);
+            }
+            Type st = type.BaseType;
+            if (st != null) searchTypes.Add(st);
+            Type valueGetType = value.GetType();
+            if (type != valueGetType)
+            {
+                searchTypes.Add(valueGetType);
+                foreach (Type t in valueGetType.GetInterfaces())
+                {
+                    searchTypes.Add(t);
+                }
+                st = valueGetType.BaseType;
+                if (st != null) searchTypes.Add(st);
+            }
+            foreach (Type t in searchTypes)
+            {
+                bool found;
+                var osd = ConvertOP(value, new Type[] { t }, typeof(OSD), typeof(OSD), out found);
+                if (found)
+                {
+                    map.Add(s, (OSD)osd);
+                    return true;
+                }
+            }
+            return false;
+        }
+        public static object Convert0(object StartObject, Type EndType)
+        {
+            object retval = null;
+
+            Type StartType = StartObject.GetType();
+            retval = EndType.InvokeMember("", BindingFlags.CreateInstance, null, null, new object[0]);
+            PropertyInfo[] pis = EndType.GetProperties(basePropertyFlags);
+            foreach (PropertyInfo oI in pis)//you should probably use getFields, in case there is no setter, but in my case this is -safe-(ish)
+            {
+                PropertyInfo thisFIs = StartType.GetProperty(oI.Name, basePropertyFlags);
+                if ((thisFIs != null))
+                {
+                    object cVal = StartType.InvokeMember(thisFIs.Name, basePropertyFlags | BindingFlags.GetProperty, null, StartObject, new object[0]);
+                    if (thisFIs.PropertyType == oI.PropertyType)
+                    { EndType.InvokeMember(thisFIs.Name, basePropertyFlags | BindingFlags.SetProperty, null, retval, new object[] { cVal }); }
+                    else
+                    {
+
+                        //check for operator for it?
+                        bool found;
+                        object o = ConvertOP(cVal, null, oI.PropertyType, null, out found);
+                        if (o != null)
+                            EndType.InvokeMember(thisFIs.Name, basePropertyFlags | BindingFlags.SetProperty, null,
+                                                 retval, new object[] { o });
+                    }
+                }
+            }
+
+            return retval;
+        }
+
+        public static string DefaultValue(OSDMap map, string helper, string empty)
+        {
+            return (map[helper]) ? map[helper].AsString() : empty;
+        }
+
+        public static OSD FromArray<T>(T[] objs, HashSet<object> exceptFor, bool prefixFP)
+        {
+            if (objs == null)
+            {
+                return new OSDNull();
+            }
+            if (objs.Length == 0)
+            {
+                return new OSDArray();
+            }
+            T[] obj = (T[])objs;
+            OSDArray osda = new OSDArray(obj.Length);
+            Type elemType = objs.GetType().GetElementType();
+            for (int i = 0; i < obj.Length; i++)
+            {
+                object a = obj[i];
+                OSD osd0 = null;
+                if (a != null)
+                {
+                    osd0 = GetOSD(a, elemType, exceptFor, prefixFP);
+                }
+                else
+                {
+                    osd0 = new OSDNull();
+                }
+                osda.Add(osd0);
+            }
+            return osda;
+        }
+
+        public virtual object AsObject() { return null; }
+
+    }
+
+    /// <summary>
+    /// This is a wrapper of unknown objects or Null
+    /// </summary>
+    public class OSDNull : OSD
+    {
+        readonly object value;
+        public OSDNull()
+        {
+            value = null;
+        }
+        public OSDNull(object obj)
+        {
+            value = obj;
+        }
+
+        public override object AsObject()
+        {
+            return value;
+        }
     }
 
     /// <summary>
@@ -418,6 +1113,7 @@ namespace OpenMetaverse.StructuredData
         public override double AsReal() { return value ? 1d : 0d; }
         public override string AsString() { return value ? "1" : "0"; }
         public override byte[] AsBinary() { return value ? trueBinary : falseBinary; }
+        public override object AsObject() { return value; }
 
         public override string ToString() { return AsString(); }
     }
@@ -444,6 +1140,7 @@ namespace OpenMetaverse.StructuredData
         public override double AsReal() { return (double)value; }
         public override string AsString() { return value.ToString(); }
         public override byte[] AsBinary() { return Utils.IntToBytesBig(value); }
+        public override object AsObject() { return value; }
 
         public override string ToString() { return AsString(); }
     }
@@ -513,6 +1210,7 @@ namespace OpenMetaverse.StructuredData
         public override string AsString() { return value.ToString("r", Utils.EnUsCulture); }
         public override byte[] AsBinary() { return Utils.DoubleToBytesBig(value); }
         public override string ToString() { return AsString(); }
+        public override object AsObject() { return value; }
     }
 
     /// <summary>
@@ -615,7 +1313,7 @@ namespace OpenMetaverse.StructuredData
             else
                 return null;
         }
-
+        public override object AsObject() { return value; }
         public override string ToString() { return AsString(); }
     }
 
@@ -638,6 +1336,7 @@ namespace OpenMetaverse.StructuredData
         public override UUID AsUUID() { return value; }
         public override byte[] AsBinary() { return value.GetBytes(); }
         public override string ToString() { return AsString(); }
+        public override object AsObject() { return value; }
     }
 
     /// <summary>
@@ -691,6 +1390,7 @@ namespace OpenMetaverse.StructuredData
         }
 
         public override DateTime AsDate() { return value; }
+        public override object AsObject() { return value; }
         public override string ToString() { return AsString(); }
     }
 
@@ -722,6 +1422,7 @@ namespace OpenMetaverse.StructuredData
 
         public override Uri AsUri() { return value; }
         public override byte[] AsBinary() { return Encoding.UTF8.GetBytes(AsString()); }
+        public override object AsObject() { return value; }
         public override string ToString() { return AsString(); }
     }
 
@@ -733,6 +1434,11 @@ namespace OpenMetaverse.StructuredData
         private byte[] value;
 
         public override OSDType Type { get { return OSDType.Binary; } }
+
+        public override bool AsBoolean()
+        {
+            return value != null && value.Length > 0;
+        }
 
         public OSDBinary(byte[] value)
         {
@@ -785,6 +1491,7 @@ namespace OpenMetaverse.StructuredData
 
         public override string AsString() { return Convert.ToBase64String(value); }
         public override byte[] AsBinary() { return value; }
+        public override object AsObject() { return value; }
 
         public override uint AsUInteger()
         {
@@ -830,7 +1537,7 @@ namespace OpenMetaverse.StructuredData
     /// <summary>
     /// 
     /// </summary>
-    public sealed class OSDMap : OSD, IDictionary<string, OSD>
+    public sealed class OSDMap : OSD, IDictionary<string, OSD>, IDictionary<string,object>
     {
         private Dictionary<string, OSD> value;
 
@@ -855,6 +1562,19 @@ namespace OpenMetaverse.StructuredData
         }
 
         public override bool AsBoolean() { return value.Count > 0; }
+        public override object AsObject() { return value; }
+
+        /// <summary>
+        /// Returns an enumerator that iterates through the collection.
+        /// </summary>
+        /// <returns>
+        /// A <see cref="T:System.Collections.Generic.IEnumerator`1"/> that can be used to iterate through the collection.
+        /// </returns>
+        /// <filterpriority>1</filterpriority>
+        IEnumerator<KeyValuePair<string, object>> IEnumerable<KeyValuePair<string, object>>.GetEnumerator()
+        {
+            throw new NotImplementedException();
+        }
 
         public override string ToString()
         {
@@ -863,10 +1583,94 @@ namespace OpenMetaverse.StructuredData
 
         #region IDictionary Implementation
 
+        /// <summary>
+        /// Removes the first occurrence of a specific object from the <see cref="T:System.Collections.Generic.ICollection`1"/>.
+        /// </summary>
+        /// <returns>
+        /// true if <paramref name="item"/> was successfully removed from the <see cref="T:System.Collections.Generic.ICollection`1"/>; otherwise, false. This method also returns false if <paramref name="item"/> is not found in the original <see cref="T:System.Collections.Generic.ICollection`1"/>.
+        /// </returns>
+        /// <param name="item">The object to remove from the <see cref="T:System.Collections.Generic.ICollection`1"/>.
+        ///                 </param><exception cref="T:System.NotSupportedException">The <see cref="T:System.Collections.Generic.ICollection`1"/> is read-only.
+        ///                 </exception>
+        public bool Remove(KeyValuePair<string, object> item)
+        {
+            return Remove(ToOSDKV(item.Key, item.Value));
+        }
+
+        private KeyValuePair<string, OSD> ToOSDKV(string key, object value1)
+        {
+            return new KeyValuePair<string, OSD>(key, ToOSD(value1));
+        }
+
+        private OSD ToOSD(object value1)
+        {
+            return OSD.FromObject(value);
+        }
+
         public int Count { get { return value.Count; } }
         public bool IsReadOnly { get { return false; } }
         public ICollection<string> Keys { get { return value.Keys; } }
+
+        /// <summary>
+        /// Gets an <see cref="T:System.Collections.Generic.ICollection`1"/> containing the values in the <see cref="T:System.Collections.Generic.IDictionary`2"/>.
+        /// </summary>
+        /// <returns>
+        /// An <see cref="T:System.Collections.Generic.ICollection`1"/> containing the values in the object that implements <see cref="T:System.Collections.Generic.IDictionary`2"/>.
+        /// </returns>
+        ICollection<object> IDictionary<string, object>.Values
+        {
+            get { throw new NotImplementedException(); }
+        }
+
         public ICollection<OSD> Values { get { return value.Values; } }
+
+        /// <summary>
+        /// Gets the value associated with the specified key.
+        /// </summary>
+        /// <returns>
+        /// true if the object that implements <see cref="T:System.Collections.Generic.IDictionary`2"/> contains an element with the specified key; otherwise, false.
+        /// </returns>
+        /// <param name="key">The key whose value to get.
+        ///                 </param><param name="value">When this method returns, the value associated with the specified key, if the key is found; otherwise, the default value for the type of the <paramref name="value"/> parameter. This parameter is passed uninitialized.
+        ///                 </param><exception cref="T:System.ArgumentNullException"><paramref name="key"/> is null.
+        ///                 </exception>
+        public bool TryGetValue(string key, out object value)
+        {
+            OSD v;
+            if (!TryGetValue(key, out v))
+            {
+                value = null;
+                return false;
+            }
+            value = v.AsObject();
+            return true;
+        }
+
+        /// <summary>
+        /// Gets or sets the element with the specified key.
+        /// </summary>
+        /// <returns>
+        /// The element with the specified key.
+        /// </returns>
+        /// <param name="key">The key of the element to get or set.
+        ///                 </param><exception cref="T:System.ArgumentNullException"><paramref name="key"/> is null.
+        ///                 </exception><exception cref="T:System.Collections.Generic.KeyNotFoundException">The property is retrieved and <paramref name="key"/> is not found.
+        ///                 </exception><exception cref="T:System.NotSupportedException">The property is set and the <see cref="T:System.Collections.Generic.IDictionary`2"/> is read-only.
+        ///                 </exception>
+        object IDictionary<string, object>.this[string key]
+        {
+            get
+            {
+                OSD ret = this[key];
+                return ret.AsObject();
+            }
+
+            set
+            {
+                this[key] = OSD.FromObject(value);
+            }
+        }
+
         public OSD this[string key]
         {
             get
@@ -875,7 +1679,7 @@ namespace OpenMetaverse.StructuredData
                 if (this.value.TryGetValue(key, out llsd))
                     return llsd;
                 else
-                    return new OSD();
+                    return new OSDNull();
             }
             set { this.value[key] = value; }
         }
@@ -883,6 +1687,20 @@ namespace OpenMetaverse.StructuredData
         public bool ContainsKey(string key)
         {
             return value.ContainsKey(key);
+        }
+
+        /// <summary>
+        /// Adds an element with the provided key and value to the <see cref="T:System.Collections.Generic.IDictionary`2"/>.
+        /// </summary>
+        /// <param name="key">The object to use as the key of the element to add.
+        ///                 </param><param name="value">The object to use as the value of the element to add.
+        ///                 </param><exception cref="T:System.ArgumentNullException"><paramref name="key"/> is null.
+        ///                 </exception><exception cref="T:System.ArgumentException">An element with the same key already exists in the <see cref="T:System.Collections.Generic.IDictionary`2"/>.
+        ///                 </exception><exception cref="T:System.NotSupportedException">The <see cref="T:System.Collections.Generic.IDictionary`2"/> is read-only.
+        ///                 </exception>
+        public void Add(string key, object value)
+        {
+            throw new NotImplementedException();
         }
 
         public void Add(string key, OSD llsd)
@@ -905,9 +1723,53 @@ namespace OpenMetaverse.StructuredData
             return value.TryGetValue(key, out llsd);
         }
 
+        /// <summary>
+        /// Adds an item to the <see cref="T:System.Collections.Generic.ICollection`1"/>.
+        /// </summary>
+        /// <param name="item">The object to add to the <see cref="T:System.Collections.Generic.ICollection`1"/>.
+        ///                 </param><exception cref="T:System.NotSupportedException">The <see cref="T:System.Collections.Generic.ICollection`1"/> is read-only.
+        ///                 </exception>
+        public void Add(KeyValuePair<string, object> item)
+        {
+            throw new NotImplementedException();
+        }
+
         public void Clear()
         {
             value.Clear();
+        }
+
+        /// <summary>
+        /// Determines whether the <see cref="T:System.Collections.Generic.ICollection`1"/> contains a specific value.
+        /// </summary>
+        /// <returns>
+        /// true if <paramref name="item"/> is found in the <see cref="T:System.Collections.Generic.ICollection`1"/>; otherwise, false.
+        /// </returns>
+        /// <param name="item">The object to locate in the <see cref="T:System.Collections.Generic.ICollection`1"/>.
+        ///                 </param>
+        public bool Contains(KeyValuePair<string, object> item)
+        {
+            throw new NotImplementedException();
+        }
+
+        /// <summary>
+        /// Copies the elements of the <see cref="T:System.Collections.Generic.ICollection`1"/> to an <see cref="T:System.Array"/>, starting at a particular <see cref="T:System.Array"/> index.
+        /// </summary>
+        /// <param name="array">The one-dimensional <see cref="T:System.Array"/> that is the destination of the elements copied from <see cref="T:System.Collections.Generic.ICollection`1"/>. The <see cref="T:System.Array"/> must have zero-based indexing.
+        ///                 </param><param name="arrayIndex">The zero-based index in <paramref name="array"/> at which copying begins.
+        ///                 </param><exception cref="T:System.ArgumentNullException"><paramref name="array"/> is null.
+        ///                 </exception><exception cref="T:System.ArgumentOutOfRangeException"><paramref name="arrayIndex"/> is less than 0.
+        ///                 </exception><exception cref="T:System.ArgumentException"><paramref name="array"/> is multidimensional.
+        ///                     -or-
+        ///                 <paramref name="arrayIndex"/> is equal to or greater than the length of <paramref name="array"/>.
+        ///                     -or-
+        ///                     The number of elements in the source <see cref="T:System.Collections.Generic.ICollection`1"/> is greater than the available space from <paramref name="arrayIndex"/> to the end of the destination <paramref name="array"/>.
+        ///                     -or-
+        ///                     Type <paramref name="T"/> cannot be cast automatically to the type of the destination <paramref name="array"/>.
+        ///                 </exception>
+        public void CopyTo(KeyValuePair<string, object>[] array, int arrayIndex)
+        {
+            throw new NotImplementedException();
         }
 
         public bool Contains(KeyValuePair<string, OSD> kvp)
@@ -1087,6 +1949,7 @@ namespace OpenMetaverse.StructuredData
         }
 
         public override bool AsBoolean() { return value.Count > 0; }
+        public override object AsObject() { return value; }
 
         public override string ToString()
         {
