@@ -483,7 +483,7 @@ namespace OpenMetaverse
                 try
                 {
                     System.Reflection.Assembly a = System.Reflection.Assembly.GetExecutingAssembly();
-                    if (a == null) a = typeof (Helpers).Assembly
+                    if (a == null) a = typeof (Helpers).Assembly;
                     System.IO.Stream s = a.GetManifestResourceStream("OpenMetaverse.Resources." + resourceName);
                     if (s != null) return s;
                 }
