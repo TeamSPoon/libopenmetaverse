@@ -554,13 +554,22 @@ namespace OpenMetaverse
         /// </example>
         public static string StructToString(object t)
         {
-            StringBuilder result = new StringBuilder();            
+            StringBuilder result = new StringBuilder();
             Type structType = t.GetType();
             FieldInfo[] fields = structType.GetFields();
-            
-            foreach (FieldInfo field in fields)
+            if (fields == null || fields.Length == 0)
             {
-                result.Append(field.Name + ": " + field.GetValue(t) + " ");
+                foreach (PropertyInfo prop in structType.GetProperties())
+                {
+                    result.Append(prop.Name + ": " + prop.GetValue(t, null) + " ");
+                }
+            }
+            else
+            {
+                foreach (FieldInfo field in fields)
+                {
+                    result.Append(field.Name + ": " + field.GetValue(t) + " ");
+                }
             }
             result.AppendLine();
             return result.ToString().TrimEnd();
