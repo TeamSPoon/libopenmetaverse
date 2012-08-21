@@ -112,6 +112,11 @@ namespace OpenMetaverse
                 return S;
 
             }
+
+            public override string ToString()
+            {
+                return Helpers.StructToString(this);
+            }
         }
 
         /// <summary>
@@ -120,6 +125,10 @@ namespace OpenMetaverse
         /// </summary>
         public struct AvatarProperties
         {
+            public override string ToString()
+            {
+                return Helpers.StructToString(this);
+            }
             /// <summary>First Life about text</summary>
             public string FirstLifeText;
             /// <summary>First Life image ID</summary>
@@ -283,6 +292,11 @@ namespace OpenMetaverse
                 return I;
 
             }
+
+            public override string ToString()
+            {
+                return Helpers.StructToString(this);
+            }
         }
 
         #endregion Subclasses
@@ -290,7 +304,7 @@ namespace OpenMetaverse
         #region Public Members
 
         /// <summary>Groups that this avatar is a member of</summary>
-        public List<UUID> Groups = new List<UUID>();
+        public List<UUID> Groups = null;// new List<UUID>();
         /// <summary>Positive and negative ratings</summary>
         public Statistics ProfileStatistics;
         /// <summary>Avatar properties including about text, profile URL, image IDs and 
@@ -426,7 +440,7 @@ namespace OpenMetaverse
             OSDMap Avi = (OSDMap)base.GetOSD();
 
             OSDArray grp = new OSDArray();
-            Groups.ForEach(delegate(UUID u) { grp.Add(OSD.FromUUID(u)); });
+            if (Groups != null) Groups.ForEach(delegate(UUID u) { grp.Add(OSD.FromUUID(u)); });
 
             OSDArray vp = new OSDArray();
 
