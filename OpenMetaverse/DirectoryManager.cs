@@ -953,8 +953,12 @@ namespace OpenMetaverse
         /// <returns></returns>
         public UUID StartGroupSearch(string searchText, int queryStart)
         {
+            return StartGroupSearch(searchText, queryStart, UUID.Random());
+        }
+        public UUID StartGroupSearch(string searchText, int queryStart, UUID queryID)
+        {
             return StartGroupSearch(searchText, queryStart, DirFindFlags.Groups | DirFindFlags.IncludePG 
-                | DirFindFlags.IncludeMature | DirFindFlags.IncludeAdult);
+                | DirFindFlags.IncludeMature | DirFindFlags.IncludeAdult, queryID);
         }
 
         /// <summary>
@@ -966,12 +970,16 @@ namespace OpenMetaverse
         /// <returns></returns>
         public UUID StartGroupSearch(string searchText, int queryStart, DirFindFlags flags)
         {
+            return  StartGroupSearch(searchText, queryStart, flags, UUID.Random());
+        }
+        public UUID StartGroupSearch(string searchText, int queryStart, DirFindFlags flags, UUID queryID)
+        {
             DirFindQueryPacket find = new DirFindQueryPacket();
             find.AgentData.AgentID = Client.Self.AgentID;
             find.AgentData.SessionID = Client.Self.SessionID;
             find.QueryData.QueryFlags = (uint)flags;
             find.QueryData.QueryText = Utils.StringToBytes(searchText);
-            find.QueryData.QueryID = UUID.Random();
+            find.QueryData.QueryID = queryID;
             find.QueryData.QueryStart = queryStart;
 
             Client.Network.SendPacket(find);
@@ -987,12 +995,16 @@ namespace OpenMetaverse
         /// <returns></returns>
         public UUID StartPeopleSearch(string searchText, int queryStart)
         {
+            return StartPeopleSearch(searchText, queryStart, UUID.Random());
+        }
+        public UUID StartPeopleSearch(string searchText, int queryStart, UUID queryID)
+        {
             DirFindQueryPacket find = new DirFindQueryPacket();
             find.AgentData.AgentID = Client.Self.AgentID;
             find.AgentData.SessionID = Client.Self.SessionID;
             find.QueryData.QueryFlags = (uint)DirFindFlags.People;
             find.QueryData.QueryText = Utils.StringToBytes(searchText);
-            find.QueryData.QueryID = UUID.Random();
+            find.QueryData.QueryID = queryID;
             find.QueryData.QueryStart = queryStart;
 
             Client.Network.SendPacket(find);
