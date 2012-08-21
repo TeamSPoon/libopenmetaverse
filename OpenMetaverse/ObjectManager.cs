@@ -709,6 +709,22 @@ namespace OpenMetaverse
             Client.Network.SendPacket(flags, simulator);
         }
 
+        public void SetFlagsOnly(Simulator simulator, uint localID, bool physical, bool temporary, bool phantom, bool castsShadow)
+        {
+            ObjectFlagUpdatePacket flags = new ObjectFlagUpdatePacket();
+            flags.AgentData.AgentID = Client.Self.AgentID;
+            flags.AgentData.SessionID = Client.Self.SessionID;
+            flags.AgentData.ObjectLocalID = localID;
+            flags.AgentData.UsePhysics = physical;
+            flags.AgentData.IsTemporary = temporary;
+            flags.AgentData.IsPhantom = phantom;
+            flags.AgentData.CastsShadows = castsShadow;
+
+            flags.ExtraPhysics = new ObjectFlagUpdatePacket.ExtraPhysicsBlock[0];
+
+            Client.Network.SendPacket(flags, simulator);
+        }
+
         /// <summary>
         /// Sets the sale properties of a single object
         /// </summary>
