@@ -767,10 +767,16 @@ namespace OpenMetaverse
         /// <returns>The transaction ID of this transfer</returns>
         public UUID RequestUpload(out UUID assetID, AssetType type, byte[] data, bool storeLocal, UUID transactionID)
         {
+            assetID = UUID.Combine(transactionID, Client.Self.SecureSessionID);
+            return RequestUploadKnown(assetID, type, data, storeLocal, transactionID);           
+        }
+
+        public UUID RequestUploadKnown(UUID assetID, AssetType type, byte[] data, bool storeLocal, UUID transactionID)
+        {
             AssetUpload upload = new AssetUpload();
             upload.AssetData = data;
             upload.AssetType = type;
-            assetID = UUID.Combine(transactionID, Client.Self.SecureSessionID);
+            // assetID = UUID.Combine(transactionID, Client.Self.SecureSessionID);
             upload.AssetID = assetID;
             upload.Size = data.Length;
             upload.XferID = 0;
