@@ -40,7 +40,7 @@ namespace OpenMetaverse.StructuredData
                 case JsonType.String:
                     string str = (string)json;
                     if (String.IsNullOrEmpty(str))
-                        return new OSD();
+                        return new OSDNull(str);
                     else
                         return OSD.FromString(str);
                 case JsonType.Array:
@@ -56,7 +56,7 @@ namespace OpenMetaverse.StructuredData
                     return map;
                 case JsonType.None:
                 default:
-                    return new OSD();
+                    return new OSDNull(json);
             }
         }
 
