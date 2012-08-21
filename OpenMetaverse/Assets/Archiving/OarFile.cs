@@ -163,7 +163,11 @@ namespace OpenMetaverse.Assets
                     case AssetType.Texture:
                         asset = new AssetTexture(uuid, data);
                         break;
+                    case AssetType.CallingCard:
+                        asset = new AssetCallingCard(uuid, data);
+                        break;
                     default:
+                        asset = new AssetMutable(assetType, uuid, data);
                         Logger.Log("[OarFile] Unhandled asset type " + assetType, Helpers.LogLevel.Error);
                         break;
                 }
