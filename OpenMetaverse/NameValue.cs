@@ -213,8 +213,9 @@ namespace OpenMetaverse
 
         public static string NameValuesToString(NameValue[] values)
         {
-            if (values == null || values.Length == 0)
+            if (values == null)
                 return String.Empty;
+            if (values.Length == 0) return "\n";
 
             StringBuilder output = new StringBuilder();
 
@@ -232,7 +233,28 @@ namespace OpenMetaverse
 
             return output.ToString();
         }
+        public static NameValue[] ParseNameValues(string text)
+        {
+            // Parse the name values
+            if (text.Length > 0)
+            {
+                if (text == "\n") return new NameValue[0];
 
+                string[] lines = text.Split('\n');
+                var NameValues = new NameValue[lines.Length];
+
+                for (int j = 0; j < lines.Length; j++)
+                {
+                    if (!String.IsNullOrEmpty(lines[j]))
+                    {
+                        NameValue nv = new NameValue(lines[j]);
+                        NameValues[j] = nv;
+                    }
+                }
+                return NameValues;
+            }
+            return null;
+        }
         private void SetValue(string value)
         {
             switch (Type)

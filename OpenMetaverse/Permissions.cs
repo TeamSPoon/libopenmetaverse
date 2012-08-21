@@ -39,12 +39,12 @@ namespace OpenMetaverse
         Transfer    = 1 << 13,
         Modify      = 1 << 14,
         Copy        = 1 << 15,
-        //[Obsolete]
-        //EnterParcel = 1 << 16,
-        //[Obsolete]
-        //Terraform   = 1 << 17,
-        //[Obsolete]
-        //OwnerDebit  = 1 << 18,
+        [Obsolete]
+        EnterParcel = 1 << 16,
+        [Obsolete]
+        Terraform   = 1 << 17,
+        [Obsolete]
+        OwnerDebit  = 1 << 18,
         Move        = 1 << 19,
         Damage      = 1 << 20,
         All         = 0x7FFFFFFF
@@ -136,6 +136,21 @@ namespace OpenMetaverse
         {
             return String.Format("Base: {0}, Everyone: {1}, Group: {2}, NextOwner: {3}, Owner: {4}",
                 BaseMask, EveryoneMask, GroupMask, NextOwnerMask, OwnerMask);
+        }
+        public string ToHexString()
+        {
+            return String.Format("Hex-{0:X}-{1:X}-{2:X}-{3:X}-{4:X}",
+                (uint)BaseMask, (uint)EveryoneMask, (uint)GroupMask, (uint)NextOwnerMask, (uint)OwnerMask);
+        }
+        static public Permissions FromHexString(string hexString)
+        {
+            string[] args = hexString.Split('-');
+            return new Permissions(FromHex(args[1]), FromHex(args[2]), FromHex(args[3]), FromHex(args[4]),
+                                   FromHex(args[5]));
+        }
+        static public uint FromHex(string hexString)
+        {
+            return UInt32.Parse(hexString, System.Globalization.NumberStyles.HexNumber);
         }
 
         public override int GetHashCode()

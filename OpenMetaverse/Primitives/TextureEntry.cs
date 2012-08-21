@@ -520,8 +520,10 @@ namespace OpenMetaverse
                 if (TextureID != Primitive.TextureEntry.WHITE_TEXTURE)
                     tex["imageid"] = OSD.FromUUID(TextureID);
                 else
-                    tex["imageid"] = OSD.FromUUID(UUID.Zero);
+                    tex["imageid"] = OSD.FromUUID(Primitive.TextureEntry.WHITE_TEXTURE);
+                //UUID.Zero;
 
+                tex["hasAttribute"] = OSD.FromUInteger((uint)hasAttribute);
                 return tex;
             }
 
@@ -546,7 +548,7 @@ namespace OpenMetaverse
                 face.TexMapType = (MappingType)map["mapping"].AsInteger();
                 face.Glow = (float)map["glow"].AsReal();
                 face.TextureID = map["imageid"].AsUUID();
-
+                face.hasAttribute = (TextureAttributes)(uint)map["hasAttribute"].AsUInteger();// = OSD.FromUInteger((uint)hasAttribute);
                 return face;
             }
 
@@ -748,7 +750,7 @@ namespace OpenMetaverse
                 return new TextureEntry(UUID.Zero);
             }
 
-            private void FromBytes(byte[] data, int pos, int length)
+            public void FromBytes(byte[] data, int pos, int length)
             {
                 if (length < 16)
                 {
@@ -1017,7 +1019,16 @@ namespace OpenMetaverse
                             if (textures[i] != UInt32.MaxValue)
                             {
                                 binWriter.Write(GetFaceBitfieldBytes(textures[i]));
-                                binWriter.Write(FaceTextures[i].TextureID.GetBytes());
+                                var ft = FaceTextures[i];
+                                if (ft != null)
+                                {
+                                    binWriter.Write(ft.TextureID.GetBytes());
+                                }
+                                else
+                                {
+                                    binWriter.Write(UUID.Zero.GetBytes()); 
+                                    FaceTextures[i] = new TextureEntryFace(DefaultTexture);
+                                }
                             }
                         }
                         binWriter.Write((byte)0);

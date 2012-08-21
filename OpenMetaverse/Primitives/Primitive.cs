@@ -30,6 +30,7 @@ using OpenMetaverse.StructuredData;
 
 namespace OpenMetaverse
 {
+    [Serializable]
     public partial class Primitive : IEquatable<Primitive>
     {
         // Used for packing and unpacking parameters
@@ -45,6 +46,7 @@ namespace OpenMetaverse
         /// <summary>
         /// Parameters used to construct a visual representation of a primitive
         /// </summary>
+        [Serializable]
         public struct ConstructionData
         {
             private const byte PROFILE_MASK = 0x0F;
@@ -533,6 +535,7 @@ namespace OpenMetaverse
         /// <summary>
         /// Extended properties to describe an object
         /// </summary>
+        [Serializable]
         public class ObjectProperties
         {
             /// <summary></summary>
@@ -613,6 +616,13 @@ namespace OpenMetaverse
                 Description = props.Description;
             }
 
+            public void SetFamilyProperties(Primitive props)
+            {
+                if (UUID.Zero != props.ID) ObjectID = props.ID;
+                if (UUID.Zero != props.OwnerID) OwnerID = props.OwnerID;
+                if (UUID.Zero != props.GroupID) GroupID = props.GroupID;
+            }
+
             public byte[] GetTextureIDBytes()
             {
                 if (TextureIDs == null || TextureIDs.Length == 0)
@@ -623,6 +633,14 @@ namespace OpenMetaverse
                     TextureIDs[i].ToBytes(bytes, 16 * i);
 
                 return bytes;
+            }
+
+            public void ApplyProperties(Primitive primitive)
+            {
+                if (UUID.Zero != OwnerID) primitive.OwnerID = OwnerID;
+                if (UUID.Zero != GroupID) primitive.GroupID = GroupID;
+                if (UUID.Zero != ObjectID) primitive.ID = ObjectID;
+                SetFamilyProperties(primitive);
             }
         }
 
@@ -913,7 +931,14 @@ namespace OpenMetaverse
                 Textures = null;
             }
             TextureAnim = prim.TextureAnim;
-            ParticleSys = prim.ParticleSys;
+            if (!Equals(prim.ParticleSys, default(ParticleSystem))) ParticleSys = (ParticleSystem)prim.ParticleSys.Clone();
+        }
+
+
+        public Primitive Clone()
+        {
+            var p = new Primitive(this);
+            return p;
         }
 
         #endregion Constructors
@@ -992,6 +1017,258 @@ namespace OpenMetaverse
             return prim;
         }
 
+        public static bool prefixFP = true;
+        public virtual OSDMap GetTotalOSD()
+        {
+            if (Properties != null) Properties.ApplyProperties(this);
+            OSDMap path = new OSDMap(14);
+            path["begin"] = OSD.FromReal(PrimData.PathBegin);
+            path["curve"] = OSD.FromInteger((int)PrimData.PathCurve);
+            path["end"] = OSD.FromReal(PrimData.PathEnd);
+            path["radius_offset"] = OSD.FromReal(PrimData.PathRadiusOffset);
+            path["revolutions"] = OSD.FromReal(PrimData.PathRevolutions);
+            path["scale_x"] = OSD.FromReal(PrimData.PathScaleX);
+            path["scale_y"] = OSD.FromReal(PrimData.PathScaleY);
+            path["shear_x"] = OSD.FromReal(PrimData.PathShearX);
+            path["shear_y"] = OSD.FromReal(PrimData.PathShearY);
+            path["skew"] = OSD.FromReal(PrimData.PathSkew);
+            path["taper_x"] = OSD.FromReal(PrimData.PathTaperX);
+            path["taper_y"] = OSD.FromReal(PrimData.PathTaperY);
+            path["twist"] = OSD.FromReal(PrimData.PathTwist);
+            path["twist_begin"] = OSD.FromReal(PrimData.PathTwistBegin);
+
+            OSDMap profile = new OSDMap(4);
+            profile["begin"] = OSD.FromReal(PrimData.ProfileBegin);
+            profile["curve"] = OSD.FromInteger((int)PrimData.ProfileCurve);
+            profile["hole"] = OSD.FromInteger((int)PrimData.ProfileHole);
+            profile["end"] = OSD.FromReal(PrimData.ProfileEnd);
+            profile["hollow"] = OSD.FromReal(PrimData.ProfileHollow);
+
+            OSDMap volume = new OSDMap(2);
+            volume["path"] = path;
+            volume["profile"] = profile;
+
+            OSDMap prim = new OSDMap(20);
+            if (Properties != null)
+            {
+                prim["name"] = OSD.FromString(Properties.Name);
+                prim["description"] = OSD.FromString(Properties.Description);
+            }
+            else
+            {
+                prim["name"] = OSD.FromString("Object");
+                prim["description"] = OSD.FromString(String.Empty);
+            }
+
+            prim["phantom"] = OSD.FromBoolean(((Flags & PrimFlags.Phantom) != 0));
+            prim["physical"] = OSD.FromBoolean(((Flags & PrimFlags.Physics) != 0));
+            prim["position"] = OSD.FromVector3(Position);
+            prim["rotation"] = OSD.FromQuaternion(Rotation);
+            prim["scale"] = OSD.FromVector3(Scale);
+            prim["pcode"] = OSD.FromInteger((int)PrimData.PCode);
+            prim["material"] = OSD.FromInteger((int)PrimData.Material);
+            prim["shadows"] = OSD.FromBoolean(((Flags & PrimFlags.CastShadows) != 0));
+            prim["state"] = OSD.FromInteger(PrimData.State);
+
+            prim["id"] = OSD.FromUUID(ID);
+            prim["localid"] = OSD.FromUInteger(LocalID);
+            prim["parentid"] = OSD.FromUInteger(ParentID);
+
+            prim["volume"] = volume;
+
+            if (Textures != null)
+            {
+                prim["textures"] = Textures.GetOSD();
+                prim["hadTextures"] = true;
+            }
+
+            if (Light != null)
+                prim["light"] = Light.GetOSD();
+
+            if (Flexible != null)
+                prim["flex"] = Flexible.GetOSD();
+
+            if (Sculpt != null)
+                prim["sculpt"] = Sculpt.GetOSD();
+
+            if (PhysicsProps != null)
+                prim["PhysicsProps"] = PhysicsProps.GetOSD();
+
+            var map = Serialize(prim);
+            if (!Equals(ParticleSys, default(ParticleSystem))) map["particalSysBytes"] = OSD.FromBinary(ParticleSys.GetBytes());
+            map["extraParamBytes"] = OSD.FromBinary(GetExtraParamsBytes());
+            if (Properties != null)
+            {
+                map["TextureIDs"] = OSD.FromArray(Properties.TextureIDs, new HashSet<object>(), prefixFP);
+            }
+            map["PrimFlags"] = (uint)Flags;
+            map["TreeSpecies"] = (byte)TreeSpecies;
+            if (NameValues != null)
+            {
+                string nvs = NameValue.NameValuesToString(NameValues);
+                map["NameValues"] = nvs;
+            }
+            if (Textures != null)
+            {
+                var data1 = Textures.GetBytes();
+                map["TexturesBytesLen"] = data1.Length;
+                map["TexturesBytes"] = OSD.FromBinary(data1);
+            }
+            return map;
+        }
+        public OSDMap Serialize(OSDMap map)
+        {
+            map = map ?? new OSDMap();            
+            Properties = Properties ?? new ObjectProperties();
+            Properties.ApplyProperties(this);
+            OSD.AddObjectOSD(this, map, GetType(), true);
+            map["assetprimoid"] = OSD.FromBoolean(true);
+            map["id"] = OSD.FromUUID(ID);
+            //@TODO map["attachment_position"] = OSD.FromVector3(AttachmentPosition);
+            //@TODO map["attachment_rotation"] = OSD.FromQuaternion(AttachmentRotation);
+            //@TODO map["before_attachment_rotation"] = OSD.FromQuaternion(BeforeAttachmentRotation);            
+            map["name"] = OSD.FromString(Properties.Name);
+            map["description"] = OSD.FromString(Properties.Description);
+            map["perms_base"] = OSD.FromInteger((uint)Properties.Permissions.BaseMask);
+            map["perms_owner"] = OSD.FromInteger((uint)Properties.Permissions.OwnerMask);
+            map["perms_group"] = OSD.FromInteger((uint)Properties.Permissions.GroupMask);
+            map["perms_everyone"] = OSD.FromInteger((uint)Properties.Permissions.EveryoneMask);
+            map["perms_next_owner"] = OSD.FromInteger((uint)Properties.Permissions.NextOwnerMask);
+            map["creator_identity"] = OSD.FromUUID(Properties.CreatorID);
+            map["owner_identity"] = OSD.FromUUID(OwnerID);
+            map["last_owner_identity"] = OSD.FromUUID(Properties.LastOwnerID);
+            map["group_identity"] = OSD.FromUUID(GroupID);
+            map["folder_id"] = OSD.FromUUID(Properties.FolderID);
+            map["region_handle"] = OSD.FromULong(RegionHandle);
+            map["click_action"] = OSD.FromInteger((byte)ClickAction);
+            map["last_attachment_point"] = OSD.FromInteger((byte)PrimData.AttachmentPoint);
+            //@TODO map["link_number"] = OSD.FromInteger(LinkNumber);
+            map["local_id"] = OSD.FromInteger(LocalID);
+            map["parent_id"] = OSD.FromInteger(ParentID);
+            map["position"] = OSD.FromVector3(Position);
+            map["rotation"] = OSD.FromQuaternion(Rotation);
+            map["velocity"] = OSD.FromVector3(Velocity);
+            map["angular_velocity"] = OSD.FromVector3(AngularVelocity);
+            map["acceleration"] = OSD.FromVector3(Acceleration);
+            map["collisionplane"] = OSD.FromVector4(CollisionPlane);
+            map["scale"] = OSD.FromVector3(Scale);
+            //@TODO map["sit_offset"] = OSD.FromVector3(SitOffset);
+            //@TODO map["sit_rotation"] = OSD.FromQuaternion(PrimData.SitRotation);
+            //@TODO map["camera_eye_offset"] = OSD.FromVector3(CameraEyeOffset);
+            //@TODO map["camera_at_offset"] = OSD.FromVector3(CameraAtOffset);
+            map["state"] = OSD.FromInteger((int)PrimData.State);
+            map["prim_code"] = OSD.FromInteger((int)PrimData.PCode);
+            map["material"] = OSD.FromInteger((int)PrimData.Material);
+            //@TODO map["pass_touches"] = OSD.FromBoolean(PassTouches);
+            map["sound_id"] = OSD.FromUUID(Sound);
+            map["sound_gain"] = OSD.FromReal(SoundGain);
+            map["sound_radius"] = OSD.FromReal(SoundRadius);
+            map["sound_flags"] = OSD.FromInteger((int)SoundFlags);
+            map["text_color"] = OSD.FromColor4(TextColor);
+            map["text"] = OSD.FromString(Text);
+            map["sit_name"] = OSD.FromString(Properties.SitName);
+            map["touch_name"] = OSD.FromString(Properties.TouchName);
+            //@TODO map["selected"] = OSD.FromBoolean(Selected);
+            //@TODO map["selector_id"] = OSD.FromUUID(SelectorID);
+            map["use_physics"] = OSD.FromBoolean(((Flags & PrimFlags.Physics) != 0));
+            map["phantom"] = OSD.FromBoolean(((Flags & PrimFlags.Phantom) != 0));
+            //@TODO map["remote_script_access_pin"] = OSD.FromInteger(RemoteScriptAccessPIN);
+            //@TODO map["volume_detect"] = OSD.FromBoolean(VolumeDetect);
+            map["die_at_edge"] = OSD.FromBoolean(((Flags & PrimFlags.DieAtEdge) != 0));
+            map["return_at_edge"] = OSD.FromBoolean(((Flags & PrimFlags.ReturnAtEdge) != 0));
+            map["temporary"] = OSD.FromBoolean(((Flags & PrimFlags.Temporary) != 0));
+            map["temporary_on_rez"] = OSD.FromBoolean(((Flags & PrimFlags.TemporaryOnRez) != 0));
+            map["sandbox"] = OSD.FromBoolean(((Flags & PrimFlags.Sandbox) != 0));
+            map["creation_date"] = OSD.FromDate(Properties. CreationDate);
+            //@TODO map["rez_date"] = OSD.FromDate(RezDate);
+            map["sale_price"] = OSD.FromInteger(Properties.SalePrice);
+            map["sale_type"] = OSD.FromInteger((int)Properties.SaleType);
+
+            if (Flexible != null)
+                map["flexible"] = Flexible.GetOSD();
+            if (Light != null)
+                map["light"] = Light.GetOSD();
+            if (Sculpt != null)
+                map["sculpt"] = Sculpt.GetOSD();
+            if (!Equals(ParticleSys, default(ParticleSystem)))
+                map["particles"] = ParticleSys.GetOSD();
+            //PrimData @todo if (Shape != null) map["shape"] = Shape.Serialize();
+            if (Textures != null)
+                map["textures"] = Textures.GetOSD();
+            //@todo if (Inventory != null) map["inventory"] = Inventory.Serialize();
+
+            return map;
+        }
+
+        public void Deserialize(OSDMap map)
+        {
+            Properties = Properties ?? new ObjectProperties();
+            OSD.SetObjectOSD(this, map);
+            if (!map["assetprimoid"].AsBoolean()) return;
+            ID = map["id"].AsUUID();
+            //@TODO AttachmentPosition = map["attachment_position"].AsVector3();
+            //@TODO AttachmentRotation = map["attachment_rotation"].AsQuaternion();
+            //@TODO BeforeAttachmentRotation = map["before_attachment_rotation"].AsQuaternion();
+            Properties = Properties ?? new ObjectProperties();
+            Properties.Name = map["name"].AsString();
+            Properties.Description = map["description"].AsString();
+            var PermsBase = (uint)map["perms_base"].AsInteger();
+            var PermsOwner = (uint)map["perms_owner"].AsInteger();
+            var PermsGroup = (uint)map["perms_group"].AsInteger();
+            var PermsEveryone = (uint)map["perms_everyone"].AsInteger();
+            var PermsNextOwner = (uint)map["perms_next_owner"].AsInteger();
+            Properties.Permissions = new Permissions(PermsBase, PermsEveryone, PermsGroup, PermsNextOwner, PermsOwner); 
+            Properties.CreatorID = map["creator_identity"].AsUUID();
+            OwnerID = map["owner_identity"].AsUUID();
+            Properties.LastOwnerID = map["last_owner_identity"].AsUUID();
+            GroupID = map["group_identity"].AsUUID();
+            Properties.FolderID = map["folder_id"].AsUUID();
+            RegionHandle = map["region_handle"].AsULong();
+            ClickAction =(ClickAction) map["click_action"].AsInteger();
+            PrimData.AttachmentPoint = (AttachmentPoint) map["last_attachment_point"].AsInteger();
+            //@TODO LinkNumber = map["link_number"].AsInteger();
+            LocalID = (uint)map["local_id"].AsInteger();
+            ParentID = (uint)map["parent_id"].AsInteger();
+            Position = map["position"].AsVector3();
+            Rotation = map["rotation"].AsQuaternion();
+            Velocity = map["velocity"].AsVector3();
+            AngularVelocity = map["angular_velocity"].AsVector3();
+            Acceleration = map["acceleration"].AsVector3();
+            CollisionPlane = map["collisionplane"].AsVector4();
+            Scale = map["scale"].AsVector3();
+            //@TODO SitOffset = map["sit_offset"].AsVector3();
+            //@TODO SitRotation = map["sit_rotation"].AsQuaternion();
+            //@TODO CameraEyeOffset = map["camera_eye_offset"].AsVector3();
+            //@TODO CameraAtOffset = map["camera_at_offset"].AsVector3();
+            PrimData.State = (byte) map["state"].AsInteger();
+            PrimData.PCode = (PCode)map["prim_code"].AsInteger();
+            PrimData.Material = (Material) map["material"].AsInteger();
+            //@TODO PassTouches = map["pass_touches"].AsBoolean();
+            Sound = map["sound_id"].AsUUID();
+            SoundGain = (float)map["sound_gain"].AsReal();
+            SoundRadius = (float)map["sound_radius"].AsReal();
+            SoundFlags =(SoundFlags) map["sound_flags"].AsInteger();
+            TextColor = map["text_color"].AsColor4();
+            Text = map["text"].AsString();
+            Properties.SitName = map["sit_name"].AsString();
+            Properties.TouchName = map["touch_name"].AsString();
+            //@TODO Selected = map["selected"].AsBoolean();
+            //@TODO SelectorID = map["selector_id"].AsUUID();
+            var UsePhysics = map["use_physics"].AsBoolean();
+            var Phantom = map["phantom"].AsBoolean();
+            //@TODO RemoteScriptAccessPIN = map["remote_script_access_pin"].AsInteger();
+            //@TODO VolumeDetect = map["volume_detect"].AsBoolean();
+            var DieAtEdge = map["die_at_edge"].AsBoolean();
+            var ReturnAtEdge = map["return_at_edge"].AsBoolean();
+            var Temporary = map["temporary"].AsBoolean();
+            var TemporaryOnRez = map["temporary_on_rez"].AsBoolean();
+            var Sandbox = map["sandbox"].AsBoolean();
+
+            Properties.CreationDate = map["creation_date"].AsDate();
+            //@TODO RezDate = map["rez_date"].AsDate();
+            Properties.SalePrice = map["sale_price"].AsInteger();
+            Properties.SaleType = (SaleType)map["sale_type"].AsInteger();
+        }
         public static Primitive FromOSD(OSD osd)
         {
             Primitive prim = new Primitive();
@@ -1075,6 +1352,167 @@ namespace OpenMetaverse
             return prim;
         }
 
+        public static Primitive FromTotalOSD(OSD osd)
+        {
+            Primitive prim = new Primitive();
+            prim.Deserialize(osd as OSDMap);
+            Primitive.ConstructionData data;
+
+            OSDMap map = (OSDMap)osd;
+            OSDMap volume = (OSDMap)map["volume"];
+            OSDMap path = (OSDMap)volume["path"];
+            OSDMap profile = (OSDMap)volume["profile"];
+
+            #region Path/Profile
+
+            data.profileCurve = (byte)0;
+            data.Material = (Material)map["material"].AsInteger();
+            data.PCode = (PCode)map["pcode"].AsInteger();
+            data.State = (byte)map["state"].AsInteger();
+
+            data.PathBegin = (float)path["begin"].AsReal();
+            data.PathCurve = (PathCurve)path["curve"].AsInteger();
+            data.PathEnd = (float)path["end"].AsReal();
+            data.PathRadiusOffset = (float)path["radius_offset"].AsReal();
+            data.PathRevolutions = (float)path["revolutions"].AsReal();
+            data.PathScaleX = (float)path["scale_x"].AsReal();
+            data.PathScaleY = (float)path["scale_y"].AsReal();
+            data.PathShearX = (float)path["shear_x"].AsReal();
+            data.PathShearY = (float)path["shear_y"].AsReal();
+            data.PathSkew = (float)path["skew"].AsReal();
+            data.PathTaperX = (float)path["taper_x"].AsReal();
+            data.PathTaperY = (float)path["taper_y"].AsReal();
+            data.PathTwist = (float)path["twist"].AsReal();
+            data.PathTwistBegin = (float)path["twist_begin"].AsReal();
+
+            data.ProfileBegin = (float)profile["begin"].AsReal();
+            data.ProfileEnd = (float)profile["end"].AsReal();
+            data.ProfileHollow = (float)profile["hollow"].AsReal();
+            data.ProfileCurve = (ProfileCurve)profile["curve"].AsInteger();
+            data.ProfileHole = (HoleType)profile["hole"].AsInteger();
+
+            #endregion Path/Profile
+
+            prim.PrimData = data;
+
+            if (map["phantom"].AsBoolean())
+                prim.Flags |= PrimFlags.Phantom;
+
+            if (map["physical"].AsBoolean())
+                prim.Flags |= PrimFlags.Physics;
+
+            if (map["shadows"].AsBoolean())
+                prim.Flags |= PrimFlags.CastShadows;
+
+            if (map["temporary"].AsBoolean())
+                prim.Flags |= PrimFlags.Temporary;
+
+            if (map["temporary_on_rez"].AsBoolean())
+                prim.Flags |= PrimFlags.TemporaryOnRez;
+
+            if (map["die_at_edge"].AsBoolean())
+                prim.Flags |= PrimFlags.DieAtEdge;
+
+            if (map["return_at_edge"].AsBoolean())
+                prim.Flags |= PrimFlags.ReturnAtEdge;
+
+            if (map["sandbox"].AsBoolean())
+                prim.Flags |= PrimFlags.Sandbox;
+
+            prim.ID = map["id"].AsUUID();
+            prim.LocalID = map["localid"].AsUInteger();
+            prim.ParentID = map["parentid"].AsUInteger();
+            prim.Position = ((OSDArray)map["position"]).AsVector3();
+            prim.Rotation = ((OSDArray)map["rotation"]).AsQuaternion();
+            prim.Scale = ((OSDArray)map["scale"]).AsVector3();
+
+            bool boolosd = map["flex"].AsBoolean();
+            if (boolosd)
+                prim.Flexible = FlexibleData.FromOSD(map["flex"]);
+
+            if (map["light"])
+                prim.Light = LightData.FromOSD(map["light"]);
+
+            if (map["sculpt"])
+                prim.Sculpt = SculptData.FromOSD(map["sculpt"]);
+
+            if (map["hadTextures"]) prim.Textures = TextureEntry.FromOSD(map["textures"]);
+
+            prim.Properties = prim.Properties ?? new ObjectProperties();
+
+            if (!string.IsNullOrEmpty(map["name"].AsString()))
+            {
+                prim.Properties.Name = map["name"].AsString();
+            }
+
+            if (!string.IsNullOrEmpty(map["description"].AsString()))
+            {
+                prim.Properties.Description = map["description"].AsString();
+            }
+            if (map["extraParamBytes"]) prim.SetExtraParamsFromBytes(map["extraParamBytes"].AsBinary(), 0);
+            if (map["particalSysBytes"].AsBoolean())
+            {
+                prim.ParticleSys = new ParticleSystem(map["particalSysBytes"].AsBinary(), 0);
+            }
+            else
+            {
+                throw new NotImplementedException("particalSysBytes");
+            }
+            if (map["TexturesBytesLen"].AsBoolean())
+            {
+                int len = map["TexturesBytesLen"].AsInteger();
+                byte[] data1 = map["TexturesBytes"].AsBinary();
+                if (prim.Textures == null)
+                {
+                    prim.Textures = new TextureEntry(data1, 0, len);
+                }
+                else
+                {
+                    prim.Textures.FromBytes(data1, 0, len);
+                }
+            }
+            else
+            {
+                // throw new NotImplementedException("TexturesBytesLen");
+            }
+            if (map["PhysicsProps"]) prim.PhysicsProps = PhysicsProperties.FromOSD(map["PhysicsProps"]);
+            if (map["properties"])
+            {
+              //  OSD.SetObjectOSD(prim.Properties, (OSDMap)map["properties"]);
+            }
+            if (map["TextureIDs"])
+            {
+                prim.Properties.TextureIDs = (UUID[])OSD.ToObject(typeof(UUID[]), map["TextureIDs"]);
+            }
+            if (map["PrimFlags"])
+            {
+                prim.Flags = (PrimFlags)map["PrimFlags"].AsUInteger();
+            }
+            if (map["NameValues"])
+            {
+                prim.NameValues = NameValue.ParseNameValues(map["NameValues"]);
+            }
+            prim.Properties.ApplyProperties(prim);
+
+            if (!map["flex"])
+                prim.Flexible = null;
+
+            if (!map["light"])
+                prim.Light = null;
+
+            if (!map["sculpt"])
+                prim.Sculpt = null;
+
+            if (!map["hadTextures"])
+                prim.Textures = null;
+
+            if (!map["PhysicsProps"])
+                prim.PhysicsProps = null;
+
+            prim.TreeSpecies = (Tree)(byte)map["TreeSpecies"].AsInteger();
+
+            return prim;
+        }
         public int SetExtraParamsFromBytes(byte[] data, int pos)
         {
             int i = pos;

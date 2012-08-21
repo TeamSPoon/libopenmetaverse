@@ -332,6 +332,11 @@ namespace OpenMetaverse
 
                 return partSys;
             }
+
+            public object Clone()
+            {
+                return new ParticleSystem(this.GetBytes(), 0);
+            }
         }
 
         #endregion Subclasses
