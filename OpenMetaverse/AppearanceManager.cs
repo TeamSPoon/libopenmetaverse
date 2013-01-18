@@ -88,6 +88,16 @@ namespace OpenMetaverse
         Skirt = 4,
         Hair = 5
     }
+    /// <summary>
+    /// Appearance Flags, introdued with server side baking, currently unused
+    /// </summary>
+    [Flags]
+    public enum AppearanceFlags : uint
+    {
+        None = 0
+    }
+
+
 
     #endregion Enums
 

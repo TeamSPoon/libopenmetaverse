@@ -144,16 +144,18 @@ namespace OpenMetaverse
             try
             {
                 byte[] data;
-
-                if (File.Exists(FileName(assetID)))
+                string afn = FileName(assetID);
+                if (File.Exists(afn))
                 {
-                    DebugLog("Reading " + FileName(assetID) + " from asset cache.");
-                    data = File.ReadAllBytes(FileName(assetID));
+                    DebugLog("Reading " + afn + " from asset cache.");
+                    data = File.ReadAllBytes(afn);
                 }
                 else
                 {
-                    DebugLog("Reading " + StaticFileName(assetID) + " from static asset cache.");
-                    data = File.ReadAllBytes(StaticFileName(assetID));
+                    afn = StaticFileName(assetID);
+                    if (!File.Exists(afn)) return null;
+                    DebugLog("Reading " + afn + " from static asset cache.");
+                    data = File.ReadAllBytes(afn);
 
                 }
                 return data;

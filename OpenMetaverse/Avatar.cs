@@ -304,7 +304,7 @@ namespace OpenMetaverse
         #region Public Members
 
         /// <summary>Groups that this avatar is a member of</summary>
-        public List<UUID> Groups = null;// new List<UUID>();
+        public List<UUID> Groups = new List<UUID>();
         /// <summary>Positive and negative ratings</summary>
         public Statistics ProfileStatistics;
         /// <summary>Avatar properties including about text, profile URL, image IDs and 
@@ -321,6 +321,26 @@ namespace OpenMetaverse
         /// Contains the visual parameters describing the deformation of the avatar
         /// </summary>
         public byte[] VisualParameters = null;
+
+        /// <summary>
+        /// Appearance version. Value greater than 0 indicates using server side baking
+        /// </summary>
+        public byte AppearanceVersion = 0;
+
+        /// <summary>
+        /// Version of the Current Outfit Folder that the appearance is based on
+        /// </summary>
+        public int COFVersion = 0;
+
+        /// <summary>
+        /// Appearance flags. Introduced with server side baking, currently unused.
+        /// </summary>
+        public AppearanceFlags AppearanceFlags = AppearanceFlags.None;
+
+        /// <summary>
+        /// List of current avatar animations
+        /// </summary>
+        public List<Animation> Animations;
 
         #endregion Public Members
 
@@ -440,7 +460,7 @@ namespace OpenMetaverse
             OSDMap Avi = (OSDMap)base.GetOSD();
 
             OSDArray grp = new OSDArray();
-            if (Groups != null) Groups.ForEach(delegate(UUID u) { grp.Add(OSD.FromUUID(u)); });
+            Groups.ForEach(delegate(UUID u) { grp.Add(OSD.FromUUID(u)); });
 
             OSDArray vp = new OSDArray();
 

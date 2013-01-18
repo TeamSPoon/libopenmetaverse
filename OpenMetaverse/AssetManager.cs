@@ -118,7 +118,8 @@ namespace OpenMetaverse
         /// <summary></summary>
         Normal = 0,
         /// <summary></summary>
-        Baked = 1
+        Baked = 1,
+        ServerBaked = 1,
     }
 
     /// <summary>
