@@ -26,7 +26,14 @@
 
 using System;
 using System.Collections.Generic;
+#if (COGBOT_LIBOMV || USE_STHREADS)
+using ThreadPoolUtil;
+using ThreadPoolUtil;
+using AutoResetEvent = System.Threading.AutoResetEvent;
+using Interlocked = System.Threading.Interlocked;
+#else
 using System.Threading;
+#endif
 
 namespace OpenMetaverse
 {

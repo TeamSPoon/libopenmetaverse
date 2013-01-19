@@ -25,7 +25,7 @@
  */
 
 using System;
-using System.Threading;
+using System.Threading;
 using System.Collections.Generic;
 
 namespace OpenMetaverse

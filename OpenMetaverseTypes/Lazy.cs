@@ -27,7 +27,14 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+#if (COGBOT_LIBOMV || USE_STHREADS)
+using ThreadPoolUtil;
+using ThreadPoolUtil;
+using ThreadPoolUtil;
+#else
 using System.Threading;
+using Thread=System.Threading.Thread;
+#endif
 
 namespace OpenMetaverse
 {
