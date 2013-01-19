@@ -31,6 +31,13 @@ using System.Text;
 using OpenMetaverse.StructuredData;
 using OpenMetaverse.Http;
 
+#if (COGBOT_LIBOMV || USE_STHREADS)
+using ThreadPoolUtil;
+using Thread = ThreadPoolUtil.Thread;
+using ThreadPool = ThreadPoolUtil.ThreadPool;
+using Monitor = ThreadPoolUtil.Monitor;
+#endif
+
 namespace OpenMetaverse
 {
     public class RegistrationApi
