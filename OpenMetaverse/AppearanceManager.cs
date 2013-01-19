@@ -26,6 +26,12 @@
 
 using System;
 using System.Collections.Generic;
+#if (COGBOT_LIBOMV || USE_STHREADS)
+using ThreadPoolUtil;
+using Thread = ThreadPoolUtil.Thread;
+using ThreadPool = ThreadPoolUtil.ThreadPool;
+using Monitor = ThreadPoolUtil.Monitor;
+#endif
 using System.Threading;
 using System.Drawing;
 using OpenMetaverse;

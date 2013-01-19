@@ -28,7 +28,17 @@
 
 using System;
 using System.Collections.Generic;
+using OpenMetaverse.Messages.Linden;
+#if (COGBOT_LIBOMV || USE_STHREADS)
+using ThreadPoolUtil;
+using ThreadPoolUtil;
+using ThreadStart = System.Threading.ThreadStart;
+using AutoResetEvent = System.Threading.AutoResetEvent;
+using ManualResetEvent = System.Threading.ManualResetEvent;
+using Interlocked = System.Threading.Interlocked;
+#else
 using System.Threading;
+#endif
 using OpenMetaverse.Packets;
 using OpenMetaverse.Assets;
 

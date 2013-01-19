@@ -35,6 +35,13 @@ using System.Threading;
 using OpenMetaverse;
 using OpenMetaverse.StructuredData;
 
+#if (COGBOT_LIBOMV || USE_STHREADS)
+using ThreadPoolUtil;
+using Thread = ThreadPoolUtil.Thread;
+using ThreadPool = ThreadPoolUtil.ThreadPool;
+using Monitor = ThreadPoolUtil.Monitor;
+#endif
+
 namespace OpenMetaverse.Voice
 {
     public partial class VoiceGateway : IDisposable

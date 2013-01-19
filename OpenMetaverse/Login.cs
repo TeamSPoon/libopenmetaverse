@@ -27,7 +27,14 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+#if (COGBOT_LIBOMV || USE_STHREADS)
+using ThreadPoolUtil;
+using Thread = ThreadPoolUtil.Thread;
+using ThreadPool = ThreadPoolUtil.ThreadPool;
+using Monitor = ThreadPoolUtil.Monitor;
+#endif
 using System.Threading;
+
 using System.IO;
 using System.Net;
 using System.Xml;
@@ -261,7 +268,7 @@ namespace OpenMetaverse
         public string InventoryHost;
         public int MaxAgentGroups;
         public string OpenIDUrl;
-        public string XMPPHost;
+        public string AgentAppearanceServiceURL;
 
         /// <summary>
         /// Parse LLSD Login Reply Data
@@ -493,9 +500,9 @@ namespace OpenMetaverse
                 OpenIDUrl = ParseString("openid_url", reply);
             }
 
-            if (reply.ContainsKey("xmpp_host"))
+            if (reply.ContainsKey("agent_appearance_service"))
             {
-                XMPPHost = ParseString("xmpp_host", reply);
+                AgentAppearanceServiceURL = ParseString("agent_appearance_service", reply);
             }
 
         }
@@ -830,8 +837,8 @@ namespace OpenMetaverse
         public string LoginMessage { get { return InternalLoginMessage; } }
         /// <summary>Maximum number of groups an agent can belong to, -1 for unlimited</summary>
         public int MaxAgentGroups = -1;
-        /// <summary>XMPP server to connect to for Group chat and IM services</summary>
-        public string XMPPHost;
+        /// <summary>Server side baking service URL</summary>
+        public string AgentAppearanceServiceURL;
         #endregion
 
         #region Private Members
@@ -1199,15 +1206,15 @@ namespace OpenMetaverse
         }
 
 
-		/// <summary>
-		/// LoginParams and the initial login XmlRpcRequest were made on a remote machine.
-		/// This method now initializes libomv with the results.
-		/// </summary>
-		public void RemoteLoginHandler(LoginResponseData response, LoginParams newContext) 
-		{
-			CurrentContext = newContext;
-			LoginReplyXmlRpcHandler(response, newContext);
-		}
+        /// <summary>
+        /// LoginParams and the initial login XmlRpcRequest were made on a remote machine.
+        /// This method now initializes libomv with the results.
+        /// </summary>
+        public void RemoteLoginHandler(LoginResponseData response, LoginParams newContext)
+        {
+            CurrentContext = newContext;
+            LoginReplyXmlRpcHandler(response, newContext);
+        }
 
 
         /// <summary>
@@ -1240,19 +1247,19 @@ namespace OpenMetaverse
                 Logger.Log("Login response failure: " + e.Message + " " + e.StackTrace, Helpers.LogLevel.Warning);
                 return;
             }
-			LoginReplyXmlRpcHandler(reply, context);
-		}
+            LoginReplyXmlRpcHandler(reply, context);
+        }
 
 
-		/// <summary>
-		/// Handles response from XML-RPC login replies with already parsed LoginResponseData
-		/// </summary>
-		private void LoginReplyXmlRpcHandler(LoginResponseData reply, LoginParams context)
-		{
-			ushort simPort = 0;
-			uint regionX = 0;
-			uint regionY = 0;
-			string reason = reply.Reason;
+        /// <summary>
+        /// Handles response from XML-RPC login replies with already parsed LoginResponseData
+        /// </summary>
+        private void LoginReplyXmlRpcHandler(LoginResponseData reply, LoginParams context)
+        {
+            ushort simPort = 0;
+            uint regionX = 0;
+            uint regionY = 0;
+            string reason = reply.Reason;
             string message = reply.Message;
 
             if (reply.Login == "true")
@@ -1289,7 +1296,7 @@ namespace OpenMetaverse
 
                 // Misc:
                 MaxAgentGroups = reply.MaxAgentGroups;
-                XMPPHost = reply.XMPPHost;
+                AgentAppearanceServiceURL = reply.AgentAppearanceServiceURL;
 
                 //uint timestamp = (uint)reply.seconds_since_epoch;
                 //DateTime time = Helpers.UnixTimeToDateTime(timestamp); // TODO: Do something with this?

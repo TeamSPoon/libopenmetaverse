@@ -26,6 +26,12 @@
 
 using System;
 using System.Collections.Generic;
+#if (COGBOT_LIBOMV || USE_STHREADS)
+using ThreadPoolUtil;
+using Thread = ThreadPoolUtil.Thread;
+using ThreadPool = ThreadPoolUtil.ThreadPool;
+using Monitor = ThreadPoolUtil.Monitor;
+#endif
 using System.Threading;
 using System.IO;
 using System.Net;
@@ -111,15 +117,16 @@ namespace OpenMetaverse
     }
 
     /// <summary>
-    /// 
+    /// When requesting image download, type of the image requested
     /// </summary>
     public enum ImageType : byte
     {
-        /// <summary></summary>
+        /// <summary>Normal in-world object texture</summary>
         Normal = 0,
-        /// <summary></summary>
+        /// <summary>Avatar texture</summary>
         Baked = 1,
-        ServerBaked = 1,
+        /// <summary>Server baked avatar texture</summary>
+        ServerBaked = 1
     }
 
     /// <summary>
@@ -768,16 +775,10 @@ namespace OpenMetaverse
         /// <returns>The transaction ID of this transfer</returns>
         public UUID RequestUpload(out UUID assetID, AssetType type, byte[] data, bool storeLocal, UUID transactionID)
         {
-            assetID = UUID.Combine(transactionID, Client.Self.SecureSessionID);
-            return RequestUploadKnown(assetID, type, data, storeLocal, transactionID);           
-        }
-
-        public UUID RequestUploadKnown(UUID assetID, AssetType type, byte[] data, bool storeLocal, UUID transactionID)
-        {
             AssetUpload upload = new AssetUpload();
             upload.AssetData = data;
             upload.AssetType = type;
-            // assetID = UUID.Combine(transactionID, Client.Self.SecureSessionID);
+            assetID = UUID.Combine(transactionID, Client.Self.SecureSessionID);
             upload.AssetID = assetID;
             upload.Size = data.Length;
             upload.XferID = 0;
@@ -823,7 +824,7 @@ namespace OpenMetaverse
                 int t = 0;
                 while (WaitingForUploadConfirm && t < UPLOAD_CONFIRM_TIMEOUT)
                 {
-                    System.Threading.Thread.Sleep(SLEEP_INTERVAL);
+                    Thread.Sleep(SLEEP_INTERVAL);
                     t += SLEEP_INTERVAL;
                 }
 
@@ -1141,6 +1142,87 @@ namespace OpenMetaverse
         }
 
         /// <summary>
+        /// Fetach avatar texture on a grid capable of server side baking
+        /// </summary>
+        /// <param name="avatarID">ID of the avatar</param>
+        /// <param name="textureID">ID of the texture</param>
+        /// <param name="bakeName">Name of the part of the avatar texture applies to</param>
+        /// <param name="callback">Callback invoked on operation completion</param>
+        public void RequestServerBakedImage(UUID avatarID, UUID textureID, string bakeName, TextureDownloadCallback callback)
+        {
+            if (avatarID == UUID.Zero || textureID == UUID.Zero || callback == null)
+                return;
+
+            if (string.IsNullOrEmpty(Client.Network.AgentAppearanceServiceURL))
+            {
+                callback(TextureRequestState.NotFound, null);
+                return;
+            }
+
+            byte[] assetData;
+            // Do we have this image in the cache?
+            if (Client.Assets.Cache.HasAsset(textureID)
+                && (assetData = Client.Assets.Cache.GetCachedAssetBytes(textureID)) != null)
+            {
+                ImageDownload image = new ImageDownload();
+                image.ID = textureID;
+                image.AssetData = assetData;
+                image.Size = image.AssetData.Length;
+                image.Transferred = image.AssetData.Length;
+                image.ImageType = ImageType.ServerBaked;
+                image.AssetType = AssetType.Texture;
+                image.Success = true;
+
+                callback(TextureRequestState.Finished, new AssetTexture(image.ID, image.AssetData));
+                FireImageProgressEvent(image.ID, image.Transferred, image.Size);
+                return;
+            }
+
+            CapsBase.DownloadProgressEventHandler progressHandler = null;
+
+            Uri url = new Uri(string.Format("{0}texture/{1}/{2}/{3}", Client.Network.AgentAppearanceServiceURL, avatarID, bakeName, textureID));
+
+            DownloadRequest req = new DownloadRequest(
+                url,
+                Client.Settings.CAPS_TIMEOUT,
+                "image/x-j2c",
+                progressHandler,
+                (HttpWebRequest request, HttpWebResponse response, byte[] responseData, Exception error) =>
+                {
+                    if (error == null && responseData != null) // success
+                    {
+                        ImageDownload image = new ImageDownload();
+                        image.ID = textureID;
+                        image.AssetData = responseData;
+                        image.Size = image.AssetData.Length;
+                        image.Transferred = image.AssetData.Length;
+                        image.ImageType = ImageType.ServerBaked;
+                        image.AssetType = AssetType.Texture;
+                        image.Success = true;
+
+                        callback(TextureRequestState.Finished, new AssetTexture(image.ID, image.AssetData));
+
+                        Client.Assets.Cache.SaveAssetToCache(textureID, responseData);
+                    }
+                    else // download failed
+                    {
+                        Logger.Log(
+                            string.Format("Failed to fetch server bake {0}: {1}",
+                                textureID,
+                                (error == null) ? "" : error.Message
+                            ),
+                            Helpers.LogLevel.Warning, Client);
+
+                        callback(TextureRequestState.Timeout, null);
+                    }
+                }
+            );
+
+            HttpDownloads.QueueDownlad(req);
+
+        }
+
+        /// <summary>
         /// Lets TexturePipeline class fire the progress event
         /// </summary>
         /// <param name="texureID">The texture ID currently being downloaded</param>
@@ -1186,9 +1268,9 @@ namespace OpenMetaverse
             if (progress)
             {
                 progressHandler = (HttpWebRequest request, HttpWebResponse response, int bytesReceived, int totalBytesToReceive) =>
-                    {
-                        FireImageProgressEvent(textureID, bytesReceived, totalBytesToReceive);
-                    };
+                {
+                    FireImageProgressEvent(textureID, bytesReceived, totalBytesToReceive);
+                };
             }
 
             Uri url = Client.Network.CurrentSim.Caps.CapabilityURI("GetTexture");

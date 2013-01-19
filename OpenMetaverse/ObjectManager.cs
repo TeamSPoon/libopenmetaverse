@@ -26,7 +26,15 @@
 
 using System;
 using System.Collections.Generic;
+using OpenMetaverse.Messages.Linden;
+#if (COGBOT_LIBOMV || USE_STHREADS)
+using ThreadPoolUtil;
+using ThreadPoolUtil;
+using Timer = System.Threading.Timer;
+using Timeout = System.Threading.Timeout;
+#else
 using System.Threading;
+#endif
 using OpenMetaverse.Packets;
 using OpenMetaverse.Http;
 using OpenMetaverse.StructuredData;
