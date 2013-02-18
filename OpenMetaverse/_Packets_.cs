@@ -25871,10 +25871,10 @@ namespace OpenMetaverse.Packets
             public ulong RegionFlagsExtended;
             public ulong RegionProtocols;
 
-        public override int Length
-        {
-            get
+            public override int Length
             {
+                get
+                {
                     return 16;
                 }
             }
@@ -27307,10 +27307,10 @@ namespace OpenMetaverse.Packets
             public int CofVersion;
             public uint Flags;
 
-        public override int Length
-        {
-            get
+            public override int Length
             {
+                get
+                {
                     return 9;
                 }
             }

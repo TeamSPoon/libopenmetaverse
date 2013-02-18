@@ -35,7 +35,6 @@ using Monitor = ThreadPoolUtil.Monitor;
 #endif
 using System.Threading;
 
-
 namespace OpenMetaverse
 {
     public sealed class WrappedObject<T> : IDisposable where T : class

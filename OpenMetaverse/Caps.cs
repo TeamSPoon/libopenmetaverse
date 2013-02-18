@@ -128,16 +128,20 @@ namespace OpenMetaverse
             // Create a request list
             OSDArray req = new OSDArray();
             // This list can be updated by using the following command to obtain a current list of capabilities the official linden viewer supports:
-            // wget -q -O - http://bitbucket.org/lindenlab/viewer-development/raw/default/indra/newview/llviewerregion.cpp | grep 'capabilityNames.append'  | sed 's/^[ \t]*//;s/capabilityNames.append("/req.Add("/'
+            // wget -q -O - https://bitbucket.org/lindenlab/viewer-development/raw/default/indra/newview/llviewerregion.cpp | grep 'capabilityNames.append'  | sed 's/^[ \t]*//;s/capabilityNames.append("/req.Add("/'
+            req.Add("AgentState");
             req.Add("AttachmentResources");
             req.Add("AvatarPickerSearch");
+            req.Add("CharacterProperties");
             req.Add("ChatSessionRequest");
             req.Add("CopyInventoryFromNotecard");
+            req.Add("CreateInventoryCategory");
             req.Add("DispatchRegionInfo");
+            req.Add("EnvironmentSettings");
             req.Add("EstateChangeInfo");
             req.Add("EventQueueGet");
-            req.Add("ObjectMedia");
-            req.Add("ObjectMediaNavigate");
+            req.Add("FetchInventory2");
+            req.Add("FetchInventoryDescendents2");
             req.Add("FetchLib2");
             req.Add("FetchLibDescendents2");
             req.Add("FetchInventory2");
@@ -147,14 +151,20 @@ namespace OpenMetaverse
             req.Add("GetMesh");
             req.Add("GetObjectCost");
             req.Add("GetObjectPhysicsData");
+            req.Add("GetTexture");
+            req.Add("GroupMemberData");
             req.Add("GroupProposalBallot");
             req.Add("HomeLocation");
             req.Add("LandResources");
             req.Add("MapLayer");
             req.Add("MapLayerGod");
+            req.Add("MeshUploadFlag");
+            req.Add("NavMeshGenerationStatus");
             req.Add("NewFileAgentInventory");
             req.Add("NewFileAgentInventoryVariablePrice");
-            req.Add("ObjectAdd");
+            req.Add("ObjectMedia");
+            req.Add("ObjectMediaNavigate");
+            req.Add("ObjectNavMeshProperties");
             req.Add("ParcelPropertiesUpdate");
             req.Add("ParcelMediaURLFilterList");
             req.Add("ParcelNavigateMedia");
@@ -162,7 +172,10 @@ namespace OpenMetaverse
             req.Add("ProductInfoRequest");
             req.Add("ProvisionVoiceAccountRequest");
             req.Add("RemoteParcelRequest");
+            req.Add("RenderMaterials");
             req.Add("RequestTextureDownload");
+            req.Add("ResourceCostSelected");
+            req.Add("RetrieveNavMeshSrc");
             req.Add("SearchStatRequest");
             req.Add("SearchStatTracking");
             req.Add("SendPostcard");
@@ -173,13 +186,18 @@ namespace OpenMetaverse
             req.Add("SimulatorFeatures");
             req.Add("SetDisplayName");
             req.Add("SimConsoleAsync");
+            req.Add("SimulatorFeatures");
             req.Add("StartGroupProposal");
+            req.Add("TerrainNavMeshProperties");
             req.Add("TextureStats");
             req.Add("UntrustedSimulatorMessage");
             req.Add("UpdateAgentInformation");
             req.Add("UpdateAgentLanguage");
+            req.Add("UpdateAvatarAppearance");
             req.Add("UpdateGestureAgentInventory");
+            req.Add("UpdateGestureTaskInventory");
             req.Add("UpdateNotecardAgentInventory");
+            req.Add("UpdateNotecardTaskInventory");
             req.Add("UpdateScriptAgent");
             req.Add("UpdateGestureTaskInventory");
             req.Add("UpdateNotecardTaskInventory");
@@ -259,7 +277,7 @@ namespace OpenMetaverse
             else
             {
                 Logger.Log("No Message handler exists for event " + eventName + ". Unable to decode. Will try Generic Handler next", Helpers.LogLevel.Warning);
-                Logger.Log("Please report this information to http://jira.openmv.org/: \n" + body, Helpers.LogLevel.Debug);
+                Logger.Log("Please report this information to http://jira.openmetaverse.org/: \n" + body, Helpers.LogLevel.Debug);
 
                 // try generic decoder next which takes a caps event and tries to match it to an existing packet
                 if (body.Type == OSDType.Map)

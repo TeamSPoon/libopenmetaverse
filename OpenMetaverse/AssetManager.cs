@@ -126,7 +126,7 @@ namespace OpenMetaverse
         /// <summary>Avatar texture</summary>
         Baked = 1,
         /// <summary>Server baked avatar texture</summary>
-        ServerBaked = 1
+        ServerBaked = 2
     }
 
     /// <summary>
@@ -1268,9 +1268,9 @@ namespace OpenMetaverse
             if (progress)
             {
                 progressHandler = (HttpWebRequest request, HttpWebResponse response, int bytesReceived, int totalBytesToReceive) =>
-                {
-                    FireImageProgressEvent(textureID, bytesReceived, totalBytesToReceive);
-                };
+                    {
+                        FireImageProgressEvent(textureID, bytesReceived, totalBytesToReceive);
+                    };
             }
 
             Uri url = Client.Network.CurrentSim.Caps.CapabilityURI("GetTexture");

@@ -34,7 +34,6 @@ using ThreadPool = ThreadPoolUtil.ThreadPool;
 using Monitor = ThreadPoolUtil.Monitor;
 #endif
 using System.Threading;
-
 using System.IO;
 using System.Net;
 using System.Xml;
@@ -67,6 +66,26 @@ namespace OpenMetaverse
         Redirecting,
         /// <summary></summary>
         Success
+    }
+
+    /// <summary>
+    /// Status of the last application run.
+    /// Used for error reporting to the grid login service for statistical purposes.
+    /// </summary>
+    public enum LastExecStatus
+    {
+        /// <summary> Application exited normally </summary>
+        Normal = 0,
+        /// <summary> Application froze </summary>
+        Froze,
+        /// <summary> Application detected error and exited abnormally </summary>
+        ForcedCrash,
+        /// <summary> Other crash </summary>
+        OtherCrash,
+        /// <summary> Application froze during logout </summary>
+        LogoutFroze,
+        /// <summary> Application crashed during logout </summary>
+        LogoutCrash
     }
 
     #endregion Enums
@@ -122,6 +141,9 @@ namespace OpenMetaverse
         public bool AgreeToTos;
         /// <summary>Unknown</summary>
         public bool ReadCritical;
+        /// <summary>Status of the last application run sent to the grid login server for statistical purposes</summary>
+        public LastExecStatus LastExecEvent = LastExecStatus.Normal;
+
         /// <summary>An array of string sent to the login server to enable various options</summary>
         public string[] Options;
 
@@ -161,6 +183,7 @@ namespace OpenMetaverse
             this.ID0 = NetworkManager.GetMAC();
             this.AgreeToTos = true;
             this.ReadCritical = true;
+            this.LastExecEvent = LastExecStatus.Normal;
         }
 
         /// <summary>
@@ -1072,6 +1095,7 @@ namespace OpenMetaverse
                 loginLLSD["read_critical"] = OSD.FromBoolean(loginParams.ReadCritical);
                 loginLLSD["viewer_digest"] = OSD.FromString(loginParams.ViewerDigest);
                 loginLLSD["id0"] = OSD.FromString(loginParams.ID0);
+                loginLLSD["last_exec_event"] = OSD.FromInteger((int)loginParams.LastExecEvent);
 
                 // Create the options LLSD array
                 OSDArray optionsOSD = new OSDArray();
@@ -1131,7 +1155,7 @@ namespace OpenMetaverse
                 if (loginParams.ReadCritical)
                     loginXmlRpc["read_critical"] = "true";
                 loginXmlRpc["id0"] = loginParams.ID0;
-                loginXmlRpc["last_exec_event"] = 0;
+                loginXmlRpc["last_exec_event"] = (int)loginParams.LastExecEvent;
 
                 // Create the options array
                 ArrayList options = new ArrayList();

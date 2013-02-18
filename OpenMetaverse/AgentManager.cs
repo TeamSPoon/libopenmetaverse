@@ -148,9 +148,8 @@ namespace OpenMetaverse
         DenyTeleport = 24,
         /// <summary>Only useful if you have Linden permissions</summary>
         GodLikeRequestTeleport = 25,
-        /// <summary>A placeholder type for future expansion, currently not
-        /// used</summary>
-        CurrentlyUnused = 26,
+        /// <summary>Request a teleport lure</summary>
+        RequestLure = 26,
         // <summary>Notification of a new group election, this is 
         // deprecated</summary>
         //[Obsolete]
@@ -1456,6 +1455,9 @@ namespace OpenMetaverse
             }
         }
 
+        /// <summary>Various abilities and preferences sent by the grid</summary>
+        public AgentStateUpdateMessage AgentStateStatus;
+
         #endregion Properties
 
         internal uint localID;
@@ -1541,6 +1543,7 @@ namespace OpenMetaverse
             // CAPS callbacks
             Client.Network.RegisterEventCallback("EstablishAgentCommunication", new Caps.EventQueueCallback(EstablishAgentCommunicationEventHandler));
             Client.Network.RegisterEventCallback("SetDisplayNameReply", new Caps.EventQueueCallback(SetDisplayNameReplyEventHandler));
+            Client.Network.RegisterEventCallback("AgentStateUpdate", new Caps.EventQueueCallback(AgentStateUpdateEventHandler));
             // Incoming Group Chat
             Client.Network.RegisterEventCallback("ChatterBoxInvitation", new Caps.EventQueueCallback(ChatterBoxInvitationEventHandler));
             // Outgoing Group Chat Reply
@@ -3709,6 +3712,14 @@ namespace OpenMetaverse
             }
         }
 
+        protected void AgentStateUpdateEventHandler(string capsKey, IMessage message, Simulator simulator)
+        {
+            if (message is AgentStateUpdateMessage)
+            {
+                AgentStateStatus = (AgentStateUpdateMessage)message;
+            }
+        }
+
         protected void EstablishAgentCommunicationEventHandler(string capsKey, IMessage message, Simulator simulator)
         {
             EstablishAgentCommunicationMessage msg = (EstablishAgentCommunicationMessage)message;
@@ -4698,6 +4709,7 @@ namespace OpenMetaverse
         /// <param name="metersCredit">The meters credited</param>
         /// <param name="metersCommitted">The meters comitted</param>
         /// <param name="description">A brief description of the transaction</param>
+        /// <param name="transactionInfo">Transaction info</param>
         public MoneyBalanceReplyEventArgs(UUID transactionID, bool transactionSuccess, int balance, int metersCredit, int metersCommitted, string description, TransactionInfo transactionInfo)
         {
             this.m_TransactionID = transactionID;
